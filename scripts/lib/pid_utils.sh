@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+# PID-file based process management helpers.
+
+is_pid_running() {
+  local pid="$1"
+  kill -0 "${pid}" >/dev/null 2>&1
+}
+
+read_pid_file() {
+  local pid_file="$1"
+  if [[ -f "${pid_file}" ]]; then
+    tr -d '[:space:]' <"${pid_file}"
+  fi
+}
+
+stop_with_pid_file() {
+  local pid_file="$1"
+  local label="${2:-process}"
+  local pid
+  pid="$(read_pid_file "${pid_file}")"
+  if [[ -z "${pid}" ]]; then
+    return 0
+  fi
+  if is_pid_running "${pid}"; then
+    echo "[pid] stopping ${label} pid=${pid}"
+    kill "${pid}" >/dev/null 2>&1 || true
+    wait "${pid}" >/dev/null 2>&1 || true
+  fi
+  rm -f "${pid_file}"
+}
+
+start_with_pid_file() {
+  local pid_file="$1"
+  shift
+  "$@" &
+  local pid="$!"
+  echo "${pid}" >"${pid_file}"
+  echo "[pid] started pid=${pid}, pid_file=${pid_file}"
+}

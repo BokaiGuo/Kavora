@@ -1,0 +1,51 @@
+# Local-only experiment template (no HTTPS)
+# - low/high reuse
+# - repeats=5
+# - baseline compare command
+#
+# Usage:
+#   MODEL_NAME=kvcache-local-tiny \
+#   BASE_URL=http://localhost:8000 \
+#   EXPORTER_METRICS_URL=http://localhost:9108/metrics \
+#   bash scripts/experiment_template_local.sh
+#
+# Baseline compare (manual):
+#   .venv/bin/python -m planner.compare_baseline \
+#     --input results/experiments/reuse_local/summary.json \
+#     --out results/experiments/reuse_local/baseline_compare.json \
+#     --e2e-p95-slo-ms 1500 \
+#     --min-success-rate 0.99 \
+#     --min-hit-ratio 0.05 \
+#     --safety-factor 0.9
+
+experiment:
+  name: "reuse_ablation_local"
+  local_only: true
+  base_url: "http://localhost:8000"
+  exporter_metrics_url: "http://localhost:9108/metrics"
+  model: "kvcache-local-tiny"
+
+workload:
+  repeats: 5
+  num_requests: 80
+  concurrency: 4
+  input_len: 320
+  output_len: 48
+  timeout_s: 30
+  base_seed: 42
+
+scenarios:
+  low_reuse:
+    shared_prefix_ratio: 0.0
+    shared_prefix_len: 0
+    unique_suffix_len: 256
+  high_reuse:
+    shared_prefix_ratio: 0.95
+    shared_prefix_len: 256
+    unique_suffix_len: 64
+
+baseline_compare:
+  e2e_p95_slo_ms: 1500
+  min_success_rate: 0.99
+  min_hit_ratio: 0.05
+  safety_factor: 0.9
