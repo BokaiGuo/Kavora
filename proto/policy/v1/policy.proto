@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package kavora.policy.v1;
+
+option go_package = "github.com/BokaiGuo-Lincoln/kavora/proto/gen/go/policy/v1;policyv1";
+
+service PolicyService {
+  // GetCapabilities negotiates protocol compatibility before policy traffic begins.
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+  // EvaluateRequest evaluates one complete request before backend dispatch.
+  rpc EvaluateRequest(EvaluateRequestRequest) returns (EvaluateRequestResponse);
+  // CheckStream evaluates an ordered open/chunk/close sequence for one response stream.
+  rpc CheckStream(stream StreamCheckRequest) returns (stream StreamCheckResponse);
+}
+
+enum FailMode {
+  FAIL_MODE_UNSPECIFIED = 0;
+  FAIL_MODE_OPEN = 1;
+  FAIL_MODE_CLOSED = 2;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOW = 1;
+  DECISION_BLOCK = 2;
+  DECISION_TERMINATE = 3;
+  DECISION_RETRYABLE_FAILURE = 4;
+}
+
+enum PolicyErrorCode {
+  POLICY_ERROR_CODE_UNSPECIFIED = 0;
+  POLICY_ERROR_CODE_INVALID_ARGUMENT = 1;
+  POLICY_ERROR_CODE_REQUEST_TOO_LARGE = 2;
+  POLICY_ERROR_CODE_PII_DETECTED = 3;
+  POLICY_ERROR_CODE_CONTENT_BLOCKED = 4;
+  POLICY_ERROR_CODE_TOKEN_BUDGET_EXCEEDED = 5;
+  POLICY_ERROR_CODE_POLICY_UNAVAILABLE = 6;
+  POLICY_ERROR_CODE_POLICY_TIMEOUT = 7;
+  POLICY_ERROR_CODE_INTERNAL = 8;
+  POLICY_ERROR_CODE_PROTOCOL_VIOLATION = 9;
+}
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_REQUEST_POLICY = 1;
+  CAPABILITY_STREAM_POLICY = 2;
+  CAPABILITY_INCREMENTAL_JSON = 3;
+  CAPABILITY_TOKEN_BUDGET = 4;
+  CAPABILITY_CACHE_KEY = 5;
+}
+
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+message RequestContext {
+  // request_id and tenant_id are assigned by the Go gateway, not trusted from clients.
+  string request_id = 1;
+  string tenant_id = 2;
+  // traceparent and tracestate carry W3C Trace Context values.
+  string traceparent = 3;
+  string tracestate = 4;
+  string policy_version = 5;
+  FailMode fail_mode = 6;
+  uint64 deadline_unix_millis = 7;
+  uint64 max_request_bytes = 8;
+  uint64 max_response_bytes = 9;
+  uint64 token_budget = 10;
+}
+
+message ChatMessage {
+  string role = 1;
+  // content_json preserves the OpenAI-compatible content value without lossy coercion.
+  bytes content_json = 2;
+  optional string name = 3;
+}
+
+message ModelRequest {
+  string model = 1;
+  repeated ChatMessage messages = 2;
+  // JSON byte fields must contain one complete canonical JSON value.
+  bytes tools_json = 3;
+  bytes generation_parameters_json = 4;
+}
+
+message PolicyResult {
+  Decision decision = 1;
+  // Consumers must branch on error_code, never on the human-readable reason.
+  PolicyErrorCode error_code = 2;
+  string reason = 3;
+  repeated string matched_rule_ids = 4;
+  // cache_key is opaque and may change when policy_version changes.
+  bytes cache_key = 5;
+  uint64 estimated_tokens = 6;
+  string policy_version = 7;
+}
+
+message GetCapabilitiesRequest {
+  ProtocolVersion client_protocol = 1;
+}
+
+message GetCapabilitiesResponse {
+  ProtocolVersion server_protocol = 1;
+  string engine_version = 2;
+  repeated Capability capabilities = 3;
+}
+
+message EvaluateRequestRequest {
+  RequestContext context = 1;
+  ModelRequest request = 2;
+}
+
+message EvaluateRequestResponse {
+  PolicyResult result = 1;
+}
+
+message StreamOpen {
+  RequestContext context = 1;
+  ModelRequest request = 2;
+}
+
+message StreamChunk {
+  bytes data = 1;
+}
+
+message StreamClose {}
+
+message StreamCheckRequest {
+  string request_id = 1;
+  // sequence starts at zero and increases by one for every message in a stream.
+  uint64 sequence = 2;
+
+  // The first payload must be open, followed by chunks and exactly one close.
+  oneof payload {
+    StreamOpen open = 10;
+    StreamChunk chunk = 11;
+    StreamClose close = 12;
+  }
+}
+
+message StreamCheckResponse {
+  string request_id = 1;
+  uint64 sequence = 2;
+  PolicyResult result = 3;
+  uint64 inspected_bytes = 4;
+  uint64 consumed_tokens = 5;
+  // release_bytes is the safe prefix of the caller's currently buffered input.
+  uint64 release_bytes = 6;
+}

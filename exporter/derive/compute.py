@@ -9,6 +9,14 @@ def _clamp01(v: float) -> float:
     return max(0.0, min(1.0, v))
 
 
+def _usage_ratio(usage_perc: float) -> float:
+    if usage_perc <= 0:
+        return 0.0
+    if usage_perc <= 1.0:
+        return _clamp01(usage_perc)
+    return _clamp01(usage_perc / 100.0)
+
+
 @dataclass
 class DeriveState:
     """Tracks prior scrapes for counter-like semantics (e.g. prefix hit counters)."""
@@ -32,16 +40,17 @@ def compute_derived(
     active = native.active_blocks
     reusable = native.reusable_cached_blocks
     free_uncached = native.free_uncached_blocks
+    usage_ratio = _usage_ratio(native.usage_perc)
 
-    if total <= 0 and native.usage_perc > 0:
-        total = 100.0
-        active = native.usage_perc
-        free_uncached = total - active
-        reusable = 0.0
-
-    hidden = (reusable / total) if total > 0 else 0.0
-    effective = ((active + reusable) / total) if total > 0 else 0.0
-    cold = (free_uncached / total) if total > 0 else 0.0
+    if total > 0:
+        hidden = reusable / total
+        effective = (active + reusable) / total
+        cold = free_uncached / total
+    else:
+        # Keep absolute block counts unknown instead of fabricating a 100-block universe.
+        hidden = 0.0
+        effective = usage_ratio
+        cold = 1.0 - usage_ratio
 
     if native.prefix_queries > 0:
         hit_ratio = native.prefix_hits / native.prefix_queries
@@ -76,4 +85,9 @@ def compute_derived(
         effective_residency_perc=_clamp01(effective),
         cold_free_perc=_clamp01(cold),
         cache_hit_ratio=cache_hit_ratio if cache_hit_ratio is None else _clamp01(cache_hit_ratio),
+        prefix_hits_metric_name=native.prefix_hits_metric_name,
+        prefix_queries_metric_name=native.prefix_queries_metric_name,
+        prefix_metric_semantics=native.prefix_metric_semantics,
+        prefix_metric_comparability=native.prefix_metric_comparability,
+        prefix_metric_basis=native.prefix_metric_basis,
     )

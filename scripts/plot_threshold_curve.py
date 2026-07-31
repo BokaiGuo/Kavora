@@ -8,6 +8,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
+from planner.policy import recommend_runs
 
 
 def _set_chinese_font() -> fm.FontProperties:
@@ -27,34 +28,6 @@ def _set_chinese_font() -> fm.FontProperties:
         fp = fm.FontProperties()
     plt.rcParams["axes.unicode_minus"] = False
     return fp
-
-
-def _recommend(
-    runs: list[dict[str, Any]],
-    *,
-    e2e_p95_slo_ms: float,
-    min_success_rate: float,
-    min_hit_ratio: float | None,
-    safety_factor: float,
-) -> float:
-    passed: list[float] = []
-    for entry in runs:
-        s = entry.get("summary", {})
-        req = s.get("requests", {})
-        total = float(req.get("total", 0) or 0)
-        ok = float(req.get("ok", 0) or 0)
-        success_rate = (ok / total) if total > 0 else 0.0
-        e2e = float(s.get("latency", {}).get("e2e_latency_p95_ms", 0.0) or 0.0)
-        req_s = float(s.get("throughput", {}).get("req_s", 0.0) or 0.0)
-        hit_ratio = float(entry.get("exporter_metrics", {}).get("kvcache_kv_cache_hit_ratio", 0.0) or 0.0)
-
-        hard_ok = e2e <= e2e_p95_slo_ms and success_rate >= min_success_rate
-        hot_ok = True if min_hit_ratio is None else (hit_ratio >= min_hit_ratio)
-        if hard_ok and hot_ok:
-            passed.append(req_s)
-    if not passed:
-        return 0.0
-    return max(passed) * safety_factor
 
 
 def _frange(start: float, end: float, step: float) -> list[float]:
@@ -90,14 +63,14 @@ def main() -> None:
     for t in thresholds:
         for scenario in ("low_reuse", "high_reuse"):
             runs = doc.get("runs", {}).get(scenario, [])
-            baseline = _recommend(
+            baseline = recommend_runs(
                 runs,
                 e2e_p95_slo_ms=args.e2e_p95_slo_ms,
                 min_success_rate=args.min_success_rate,
                 min_hit_ratio=None,
                 safety_factor=args.safety_factor,
             )
-            dual = _recommend(
+            dual = recommend_runs(
                 runs,
                 e2e_p95_slo_ms=args.e2e_p95_slo_ms,
                 min_success_rate=args.min_success_rate,
@@ -108,22 +81,59 @@ def main() -> None:
                 {
                     "min_hit_ratio": t,
                     "scenario": scenario,
-                    "baseline_rps": round(baseline, 6),
-                    "dual_rps": round(dual, 6),
-                    "delta": round(dual - baseline, 6),
+                    "baseline_rps": round(float(baseline["recommended_rps"]), 6),
+                    "dual_rps": round(float(dual["recommended_rps"]), 6),
+                    "delta": round(float(dual["recommended_rps"]) - float(baseline["recommended_rps"]), 6),
+                    "metric_quality": str(dual["metric_quality"]),
+                    "num_runs": int(dual["num_runs"]),
+                    "num_runs_ok_metrics": int(dual["num_runs_ok_metrics"]),
+                    "num_runs_missing_hit_ratio": int(dual["num_runs_missing_hit_ratio"]),
+                    "num_runs_stale_metrics": int(dual["num_runs_stale_metrics"]),
+                    "num_runs_window_hit_ratio": int(dual["num_runs_window_hit_ratio"]),
+                    "num_runs_snapshot_fallback_hit_ratio": int(dual["num_runs_snapshot_fallback_hit_ratio"]),
+                    "hit_ratio_source": str(dual["hit_ratio_source"]),
+                    "hit_ratio_comparable": bool(dual["hit_ratio_comparable"]),
+                    "num_runs_prefix_metric_strict": int(dual["num_runs_prefix_metric_strict"]),
+                    "num_runs_prefix_metric_token_fallback": int(dual["num_runs_prefix_metric_token_fallback"]),
+                    "num_runs_prefix_metric_other": int(dual["num_runs_prefix_metric_other"]),
+                    "num_runs_prefix_metric_missing": int(dual["num_runs_prefix_metric_missing"]),
+                    "prefix_metric_check": str(dual["prefix_metric_check"]),
                 }
             )
 
     out_csv = Path(args.out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     with out_csv.open("w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["min_hit_ratio", "scenario", "baseline_rps", "dual_rps", "delta"])
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "min_hit_ratio",
+                "scenario",
+                "baseline_rps",
+                "dual_rps",
+                "delta",
+                "metric_quality",
+                "num_runs",
+                "num_runs_ok_metrics",
+                "num_runs_missing_hit_ratio",
+                "num_runs_stale_metrics",
+                "num_runs_window_hit_ratio",
+                "num_runs_snapshot_fallback_hit_ratio",
+                "hit_ratio_source",
+                "hit_ratio_comparable",
+                "num_runs_prefix_metric_strict",
+                "num_runs_prefix_metric_token_fallback",
+                "num_runs_prefix_metric_other",
+                "num_runs_prefix_metric_missing",
+                "prefix_metric_check",
+            ],
+        )
         w.writeheader()
         w.writerows(rows)
 
     out_json = Path(args.out_json)
     out_json.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps({"rows": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_json.write_text(json.dumps({"schema_version": 3, "rows": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     x = thresholds
     series: dict[str, dict[str, list[float]]] = {

@@ -104,6 +104,58 @@ async def _one_request(
     return dt, ok
 
 
+async def _run_request_batch(
+    client: httpx.AsyncClient,
+    *,
+    req_seeds: list[int],
+    concurrency: int,
+    base_url: str,
+    endpoint: str,
+    model: str,
+    input_len: int,
+    output_len: int,
+    timeout_s: float,
+    shared_prefix_ratio: float,
+    shared_prefix_len: int,
+    unique_suffix_len: int,
+) -> dict[str, Any]:
+    sem = asyncio.Semaphore(max(1, concurrency))
+    latencies: list[float] = []
+    ok_count = 0
+
+    t_start = time.perf_counter()
+
+    async def run_one(seed: int) -> None:
+        nonlocal ok_count
+        async with sem:
+            dt, ok = await _one_request(
+                client,
+                base_url=base_url,
+                endpoint=endpoint,
+                model=model,
+                seed=seed,
+                input_len=input_len,
+                output_len=output_len,
+                timeout_s=timeout_s,
+                shared_prefix_ratio=shared_prefix_ratio,
+                shared_prefix_len=shared_prefix_len,
+                unique_suffix_len=unique_suffix_len,
+            )
+            latencies.append(dt)
+            if ok:
+                ok_count += 1
+
+    await asyncio.gather(*(run_one(s) for s in req_seeds))
+    elapsed_s = max(1e-9, time.perf_counter() - t_start)
+    return {
+        "latencies": latencies,
+        "ok": ok_count,
+        "total": len(latencies),
+        "failed": len(latencies) - ok_count,
+        "elapsed_s": elapsed_s,
+    }
+
+
 async def run_custom_http(
     *,
     base_url: str,
@@ -118,9 +170,13 @@ async def run_custom_http(
     shared_prefix_ratio: float = 0.0,
     shared_prefix_len: int = 0,
     unique_suffix_len: int = 64,
+    warmup_requests: int = 0,
 ) -> dict[str, Any]:
     req_ids = list(range(max(0, num_requests)))
+    warmup_ids = list(range(max(0, warmup_requests)))
     req_seeds = [deterministic_request_seed(base_seed, i) for i in req_ids]
+    warmup_base_seed = base_seed ^ 0xA5A5A5A5
+    warmup_seeds = [deterministic_request_seed(warmup_base_seed, i) for i in warmup_ids]
     prompts_for_digest = [
         _build_prompt_with_reuse(
             seed=s,
@@ -131,43 +187,50 @@ async def run_custom_http(
         )
         for s in req_seeds
     ]
+    run_started_ts = time.time()
+    # Local benchmark traffic should not inherit proxy settings.
+    async with httpx.AsyncClient(trust_env=False) as client:
+        warmup = await _run_request_batch(
+            client,
+            req_seeds=warmup_seeds,
+            concurrency=concurrency,
+            base_url=base_url,
+            endpoint=endpoint,
+            model=model,
+            input_len=input_len,
+            output_len=output_len,
+            timeout_s=timeout_s,
+            shared_prefix_ratio=shared_prefix_ratio,
+            shared_prefix_len=shared_prefix_len,
+            unique_suffix_len=unique_suffix_len,
+        )
+        warmup_end_ts = time.time()
+        measured = await _run_request_batch(
+            client,
+            req_seeds=req_seeds,
+            concurrency=concurrency,
+            base_url=base_url,
+            endpoint=endpoint,
+            model=model,
+            input_len=input_len,
+            output_len=output_len,
+            timeout_s=timeout_s,
+            shared_prefix_ratio=shared_prefix_ratio,
+            shared_prefix_len=shared_prefix_len,
+            unique_suffix_len=unique_suffix_len,
+        )
+    run_finished_ts = time.time()
 
-    sem = asyncio.Semaphore(max(1, concurrency))
-    latencies: list[float] = []
-    ok_count = 0
-
-    t_start = time.perf_counter()
-    async with httpx.AsyncClient() as client:
-        async def run_one(seed: int) -> None:
-            nonlocal ok_count
-            async with sem:
-                dt, ok = await _one_request(
-                    client,
-                    base_url=base_url,
-                    endpoint=endpoint,
-                    model=model,
-                    seed=seed,
-                    input_len=input_len,
-                    output_len=output_len,
-                    timeout_s=timeout_s,
-                    shared_prefix_ratio=shared_prefix_ratio,
-                    shared_prefix_len=shared_prefix_len,
-                    unique_suffix_len=unique_suffix_len,
-                )
-                latencies.append(dt)
-                if ok:
-                    ok_count += 1
-
-        await asyncio.gather(*(run_one(s) for s in req_seeds))
-    elapsed_s = max(1e-9, time.perf_counter() - t_start)
-
+    latencies = measured["latencies"]
+    ok_count = int(measured["ok"])
+    elapsed_s = float(measured["elapsed_s"])
     e2e_p95_ms = _percentile(latencies, 0.95) * 1000.0
     e2e_mean_ms = (statistics.mean(latencies) * 1000.0) if latencies else 0.0
-    fail_count = len(latencies) - ok_count
+    fail_count = int(measured["failed"])
 
     return {
         "requests": {
-            "total": len(latencies),
+            "total": int(measured["total"]),
             "ok": ok_count,
             "failed": fail_count,
         },
@@ -178,6 +241,18 @@ async def run_custom_http(
             # Keep keys optional/nullable instead of fake zeros.
             "ttft_p95_ms": None,
             "tpot_p95_ms": None,
+        },
+        "warmup": {
+            "requests": len(warmup_seeds),
+            "completed": int(warmup["total"]),
+            "ok": int(warmup["ok"]),
+            "failed": int(warmup["failed"]),
+            "elapsed_s": float(warmup["elapsed_s"]),
+        },
+        "timing": {
+            "run_started_ts": run_started_ts,
+            "warmup_end_ts": warmup_end_ts,
+            "run_finished_ts": run_finished_ts,
         },
         "throughput": {
             "req_s": ok_count / elapsed_s,
@@ -191,6 +266,7 @@ async def run_custom_http(
             "output_len": output_len,
             "concurrency": concurrency,
             "num_requests": num_requests,
+            "warmup_requests": len(warmup_seeds),
         },
         "reproducibility": {
             "base_seed": base_seed,
@@ -213,6 +289,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--shared-prefix-ratio", type=float, default=0.0)
     p.add_argument("--shared-prefix-len", type=int, default=0)
     p.add_argument("--unique-suffix-len", type=int, default=64)
+    p.add_argument("--warmup-requests", type=int, default=0)
     p.add_argument("--timeout-s", type=float, default=30.0)
     p.add_argument("--output", default="results/raw/benchmark_summary.json")
     return p.parse_args()
@@ -234,6 +311,7 @@ def main() -> None:
             shared_prefix_ratio=args.shared_prefix_ratio,
             shared_prefix_len=args.shared_prefix_len,
             unique_suffix_len=args.unique_suffix_len,
+            warmup_requests=args.warmup_requests,
         )
     )
     out = Path(args.output)

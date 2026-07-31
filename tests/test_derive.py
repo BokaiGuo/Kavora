@@ -50,3 +50,37 @@ def test_counter_reset_handling() -> None:
     out = compute_derived(_snapshot(cache_hits_total=5.0, cache_misses_total=20.0), state, cfg)
     if out.cache_hit_ratio is not None:
         assert 0.0 <= out.cache_hit_ratio <= 1.0
+
+
+def test_compute_derived_does_not_fabricate_absolute_blocks_from_percentage_usage() -> None:
+    out = compute_derived(
+        _snapshot(
+            total_blocks=0.0,
+            usage_perc=37.5,
+            active_blocks=0.0,
+            reusable_cached_blocks=0.0,
+            free_uncached_blocks=0.0,
+        )
+    )
+
+    assert out.total_blocks == 0.0
+    assert out.active_blocks == 0.0
+    assert out.free_uncached_blocks == 0.0
+    assert out.effective_residency_perc == 0.375
+    assert out.cold_free_perc == 0.625
+
+
+def test_compute_derived_supports_fractional_usage_ratio_without_total_blocks() -> None:
+    out = compute_derived(
+        _snapshot(
+            total_blocks=0.0,
+            usage_perc=0.25,
+            active_blocks=0.0,
+            reusable_cached_blocks=0.0,
+            free_uncached_blocks=0.0,
+        )
+    )
+
+    assert out.total_blocks == 0.0
+    assert out.effective_residency_perc == 0.25
+    assert out.cold_free_perc == 0.75

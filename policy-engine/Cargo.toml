@@ -1,0 +1,27 @@
+[package]
+name = "kavora-policy"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Low-latency policy engine for the Kavora inference control plane"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+prost = "0.14.1"
+regex = "1.12.3"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sha2 = "0.10.9"
+hex = "0.4.3"
+tokio = { version = "1.53.0", features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio-stream = { version = "0.1.19", features = ["net"] }
+tonic = "0.14.2"
+tonic-prost = "0.14.2"
+wasmtime = "47.0.2"
+
+[dev-dependencies]
+hex = "0.4.3"
+hyper-util = { version = "0.1.20", features = ["tokio"] }
+tempfile = "3.23.0"
+tower = { version = "0.5.3", features = ["util"] }

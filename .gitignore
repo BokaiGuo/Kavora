@@ -42,6 +42,10 @@ tmp/
 *.log
 models/hf/
 
+# Go / Rust build outputs
+/policy-engine/target/
+/gateway/config.yaml
+
 # Editor / OS
 .idea/
 .vscode/*

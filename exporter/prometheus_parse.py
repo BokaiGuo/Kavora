@@ -77,9 +77,7 @@ def aggregate_prometheus_text(
         return out
     except Exception:
         logger.warning("prometheus_client parse failed; using relaxed line parser", exc_info=True)
-        relaxed = parse_prometheus_text_relaxed_lines(text)
-        if filt:
-            logger.warning("label_filter ignored in relaxed parse fallback")
+        relaxed = parse_prometheus_text_relaxed_lines(text, label_filter=filt)
         return relaxed
 
 
@@ -88,11 +86,51 @@ def parse_prometheus_text(text: str) -> dict[str, float]:
     return aggregate_prometheus_text(text)
 
 
-# Loose line used only for best-effort error messages / debugging
-_LINE_RE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{[^}]*\})?\s+([-+0-9.eE]+|NaN|nan|Inf|inf)\s*$")
+# Loose parser used only for best-effort fallback.
+_LINE_RE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+([-+0-9.eE]+|NaN|nan|Inf|inf)\s*$")
+_LABEL_RE = re.compile(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:\\.|[^"\\])*)"\s*')
 
 
-def parse_prometheus_text_relaxed_lines(text: str) -> dict[str, float]:
+def _unescape_label_value(raw: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == "\\" and i + 1 < len(raw):
+            nxt = raw[i + 1]
+            if nxt == "n":
+                out.append("\n")
+            elif nxt in {'\\', '"'}:
+                out.append(nxt)
+            else:
+                out.append(nxt)
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _parse_labels_relaxed(raw: str) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    pos = 0
+    text = raw.strip()
+    while pos < len(text):
+        match = _LABEL_RE.match(text, pos)
+        if match is None:
+            break
+        labels[match.group(1)] = _unescape_label_value(match.group(2))
+        pos = match.end()
+        while pos < len(text) and text[pos] in {" ", ","}:
+            pos += 1
+    return labels
+
+
+def parse_prometheus_text_relaxed_lines(
+    text: str,
+    *,
+    label_filter: Mapping[str, str] | None = None,
+) -> dict[str, float]:
     """Fallback when the official parser fails on slightly broken text; still sums duplicate names."""
     out: dict[str, float] = {}
     for raw in text.splitlines():
@@ -102,8 +140,11 @@ def parse_prometheus_text_relaxed_lines(text: str) -> dict[str, float]:
         m = _LINE_RE.match(line)
         if not m:
             continue
+        labels = _parse_labels_relaxed(m.group(2) or "")
+        if label_filter is not None and not _labels_match(labels, label_filter):
+            continue
         try:
-            out[m.group(1)] = out.get(m.group(1), 0.0) + float(m.group(2))
+            out[m.group(1)] = out.get(m.group(1), 0.0) + float(m.group(3))
         except ValueError:
             continue
     return out

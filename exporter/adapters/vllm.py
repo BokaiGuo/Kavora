@@ -21,6 +21,21 @@ def _parse_metrics_body(text: str) -> dict[str, float]:
         return parse_prometheus_text_relaxed_lines(text)
 
 
+def _pick_metric_with_name(metrics: dict[str, float], *keys: str, default: float = 0.0) -> tuple[float, str]:
+    for key in keys:
+        if key in metrics:
+            return float(metrics[key]), key
+    return default, ""
+
+
+def _prefix_metric_metadata(hits_metric_name: str, queries_metric_name: str) -> tuple[str, str, str]:
+    if hits_metric_name and queries_metric_name:
+        return "prefix_query_counters", "strict", "queries"
+    if hits_metric_name or queries_metric_name:
+        return "partial", "missing", "mixed"
+    return "missing", "missing", "missing"
+
+
 class VllmAdapter:
     def __init__(
         self,
@@ -35,7 +50,8 @@ class VllmAdapter:
         self.model_group = model_group
 
     async def collect(self) -> NativeSnapshot:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        # Local backend metrics scrapes should not inherit proxy settings.
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
             resp = await client.get(self.metrics_url)
             resp.raise_for_status()
             m = _parse_metrics_body(resp.text)
@@ -45,6 +61,16 @@ class VllmAdapter:
                 if k in m:
                     return float(m[k])
             return default
+
+        prefix_hits, prefix_hits_metric_name = _pick_metric_with_name(
+            m, "vllm:prefix_cache_hits_total", "vllm:prefix_cache_hits"
+        )
+        prefix_queries, prefix_queries_metric_name = _pick_metric_with_name(
+            m, "vllm:prefix_cache_queries_total", "vllm:prefix_cache_queries"
+        )
+        prefix_metric_semantics, prefix_metric_comparability, prefix_metric_basis = _prefix_metric_metadata(
+            prefix_hits_metric_name, prefix_queries_metric_name
+        )
 
         return NativeSnapshot(
             backend="vllm",
@@ -57,8 +83,12 @@ class VllmAdapter:
             reusable_cached_blocks=_pick("vllm_obs:kv_reusable_cached_blocks"),
             free_uncached_blocks=_pick("vllm_obs:kv_free_uncached_blocks"),
             duplicate_cached_blocks=_pick("vllm_obs:kv_duplicate_cached_blocks"),
-            # vLLM >= 0.18 uses *_total counter names.
-            prefix_hits=_pick("vllm:prefix_cache_hits_total", "vllm:prefix_cache_hits"),
-            prefix_queries=_pick("vllm:prefix_cache_queries_total", "vllm:prefix_cache_queries"),
+            prefix_hits=prefix_hits,
+            prefix_queries=prefix_queries,
+            prefix_hits_metric_name=prefix_hits_metric_name,
+            prefix_queries_metric_name=prefix_queries_metric_name,
+            prefix_metric_semantics=prefix_metric_semantics,
+            prefix_metric_comparability=prefix_metric_comparability,
+            prefix_metric_basis=prefix_metric_basis,
             extra=m,
         )

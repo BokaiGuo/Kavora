@@ -1,0 +1,22 @@
+tenants:
+  - id: local-development
+    api_keys:
+      - replace-with-a-random-development-key
+    max_concurrent: 4
+    token_budget: 8192
+    policy_fail_mode: closed
+
+  - id: availability-demo
+    api_keys:
+      - replace-with-a-second-random-key
+    max_concurrent: 2
+    token_budget: 4096
+    policy_fail_mode: open
+
+backends:
+  - id: local-fake
+    url: http://127.0.0.1:18080
+    enabled: true
+    weight: 1
+    models: []
+    health_path: /healthz

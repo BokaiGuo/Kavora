@@ -15,3 +15,5 @@ class Settings(BaseSettings):
     scrape_stale_after_s: float = 120.0
     scrape_failures_not_ready: int = 3
     scrape_error_max_len: int = 256
+    tokens_per_block: int = 16
+    state_dir: str = "results/kavora-state"

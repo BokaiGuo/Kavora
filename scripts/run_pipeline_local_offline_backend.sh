@@ -3,9 +3,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
+USER_TOOL_PYTHON="${TOOL_PYTHON:-}"
 
 # shellcheck source=./lib/pipeline_common.sh
 source "${ROOT}/scripts/lib/pipeline_common.sh"
+
+if [[ -z "${USER_TOOL_PYTHON}" ]] && [[ -x "${ROOT}/.venv/bin/python" ]]; then
+  TOOL_PYTHON="${ROOT}/.venv/bin/python"
+fi
 
 ensure_results_tree
 
@@ -65,6 +70,9 @@ case "${BACKEND}" in
     ;;
   sglang)
     export PID_FILE="${RESULTS_DIR}/sglang.pid"
+    export SGLANG_HOST
+    export SGLANG_PORT
+    export SERVED_MODEL_NAME
     bash "${ROOT}/scripts/launch_sglang.sh"
     wait_http_ok "${SGLANG_HEALTH_URL}"
     echo "[pipeline] SGLang ready"
@@ -76,7 +84,7 @@ esac
 
 if [[ "${START_EXPORTER}" == "true" ]]; then
   start_exporter_with_pid "${BACKEND}" "${BACKEND_METRICS_URL}"
-  wait_http_ok "${EXPORTER_HEALTH_URL}"
+  wait_http_ok "${EXPORTER_READY_URL}"
   echo "[pipeline] exporter ready"
 fi
 

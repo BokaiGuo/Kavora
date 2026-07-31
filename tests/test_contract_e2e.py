@@ -16,8 +16,10 @@ class _FakeResponse:
 
 
 class _FakeAsyncClient:
+    last_kwargs = None
+
     def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
-        pass
+        type(self).last_kwargs = kwargs
 
     async def __aenter__(self) -> "_FakeAsyncClient":
         return self
@@ -61,7 +63,11 @@ def test_contract_fake_metrics_to_exporter_output(monkeypatch) -> None:
     writer.write(derived)
     payload = writer.render().decode("utf-8")
 
+    assert _FakeAsyncClient.last_kwargs == {"timeout": 5.0, "trust_env": False}
     assert "kvcache_kv_total_blocks" in payload
     assert "kvcache_kv_active_blocks" in payload
     assert "kvcache_kv_hidden_reuse_ready_perc" in payload
     assert "kvcache_kv_cache_hit_ratio" in payload
+    assert "kvcache_exporter_prefix_metric_semantics_info" in payload
+    assert 'semantics="prefix_query_counters"' in payload
+    assert "kvcache_exporter_prefix_metric_comparable 1.0" in payload

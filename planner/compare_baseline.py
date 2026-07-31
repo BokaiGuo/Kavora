@@ -7,33 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-
-def _recommend(
-    runs: list[dict[str, Any]],
-    *,
-    e2e_p95_slo_ms: float,
-    min_success_rate: float,
-    min_hit_ratio: float | None,
-    safety_factor: float,
-) -> float:
-    passed: list[float] = []
-    for entry in runs:
-        s = entry.get("summary", {})
-        req = s.get("requests", {})
-        total = float(req.get("total", 0) or 0)
-        ok = float(req.get("ok", 0) or 0)
-        success_rate = (ok / total) if total > 0 else 0.0
-        e2e = float(s.get("latency", {}).get("e2e_latency_p95_ms", 0.0) or 0.0)
-        req_s = float(s.get("throughput", {}).get("req_s", 0.0) or 0.0)
-        hit_ratio = float(entry.get("exporter_metrics", {}).get("kvcache_kv_cache_hit_ratio", 0.0) or 0.0)
-
-        hard_ok = e2e <= e2e_p95_slo_ms and success_rate >= min_success_rate
-        hot_ok = True if min_hit_ratio is None else (hit_ratio >= min_hit_ratio)
-        if hard_ok and hot_ok:
-            passed.append(req_s)
-    if not passed:
-        return 0.0
-    return max(passed) * safety_factor
+from planner.policy import recommend_runs
 
 
 def main() -> None:
@@ -48,6 +22,7 @@ def main() -> None:
 
     doc = json.loads(Path(args.input).read_text(encoding="utf-8"))
     out: dict[str, Any] = {
+        "schema_version": 3,
         "policy": {
             "e2e_p95_slo_ms": args.e2e_p95_slo_ms,
             "min_success_rate": args.min_success_rate,
@@ -59,14 +34,14 @@ def main() -> None:
 
     for scenario in ("low_reuse", "high_reuse"):
         runs = doc.get("runs", {}).get(scenario, [])
-        hard_only = _recommend(
+        hard_only = recommend_runs(
             runs,
             e2e_p95_slo_ms=args.e2e_p95_slo_ms,
             min_success_rate=args.min_success_rate,
             min_hit_ratio=None,
             safety_factor=args.safety_factor,
         )
-        dual = _recommend(
+        dual = recommend_runs(
             runs,
             e2e_p95_slo_ms=args.e2e_p95_slo_ms,
             min_success_rate=args.min_success_rate,
@@ -74,9 +49,24 @@ def main() -> None:
             safety_factor=args.safety_factor,
         )
         out["scenarios"][scenario] = {
-            "baseline_hard_only_recommended_rps": round(hard_only, 6),
-            "dual_boundary_recommended_rps": round(dual, 6),
-            "delta_dual_minus_baseline": round(dual - hard_only, 6),
+            "baseline_hard_only_recommended_rps": round(float(hard_only["recommended_rps"]), 6),
+            "dual_boundary_recommended_rps": round(float(dual["recommended_rps"]), 6),
+            "delta_dual_minus_baseline": round(float(dual["recommended_rps"]) - float(hard_only["recommended_rps"]), 6),
+            "num_runs": int(dual["num_runs"]),
+            "num_runs_missing_hit_ratio": int(dual["num_runs_missing_hit_ratio"]),
+            "num_runs_stale_metrics": int(dual["num_runs_stale_metrics"]),
+            "num_runs_ok_metrics": int(dual["num_runs_ok_metrics"]),
+            "metric_quality": str(dual["metric_quality"]),
+            "num_runs_window_hit_ratio": int(dual["num_runs_window_hit_ratio"]),
+            "num_runs_snapshot_fallback_hit_ratio": int(dual["num_runs_snapshot_fallback_hit_ratio"]),
+            "hit_ratio_source": str(dual["hit_ratio_source"]),
+            "ok_metric_run_fraction": float(dual["ok_metric_run_fraction"]),
+            "hit_ratio_comparable": bool(dual["hit_ratio_comparable"]),
+            "num_runs_prefix_metric_strict": int(dual["num_runs_prefix_metric_strict"]),
+            "num_runs_prefix_metric_token_fallback": int(dual["num_runs_prefix_metric_token_fallback"]),
+            "num_runs_prefix_metric_other": int(dual["num_runs_prefix_metric_other"]),
+            "num_runs_prefix_metric_missing": int(dual["num_runs_prefix_metric_missing"]),
+            "prefix_metric_check": str(dual["prefix_metric_check"]),
         }
 
     out_path = Path(args.out)

@@ -25,6 +25,11 @@ class NativeSnapshot(BaseModel):
     duplicate_cached_blocks: float = 0.0
     prefix_hits: float = 0.0
     prefix_queries: float = 0.0
+    prefix_hits_metric_name: str = ""
+    prefix_queries_metric_name: str = ""
+    prefix_metric_semantics: str = "missing"
+    prefix_metric_comparability: str = "missing"
+    prefix_metric_basis: str = "missing"
     extra: dict[str, float] = Field(default_factory=dict)
 
 
@@ -45,3 +50,8 @@ class DerivedSnapshot(BaseModel):
     effective_residency_perc: float
     cold_free_perc: float
     cache_hit_ratio: float | None = None
+    prefix_hits_metric_name: str = ""
+    prefix_queries_metric_name: str = ""
+    prefix_metric_semantics: str = "missing"
+    prefix_metric_comparability: str = "missing"
+    prefix_metric_basis: str = "missing"

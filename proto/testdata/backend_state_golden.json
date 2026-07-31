@@ -1,0 +1,84 @@
+{
+  "backend": "vllm",
+  "backend_id": "vllm:local",
+  "instance": "local",
+  "model": "demo-model",
+  "model_group": "demo",
+  "observed_at_unix_millis": 1700000000000,
+  "schema_version": "kavora.backend-state/v1",
+  "signals": {
+    "active_blocks": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "gauge",
+      "source": "derived.active_blocks",
+      "value": 20.0
+    },
+    "cache_hit_ratio": {
+      "has_value": false,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "missing",
+      "semantics": "missing",
+      "source": "derived",
+      "value": 0.0
+    },
+    "cold_free_perc": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "ratio",
+      "source": "derived.cold_free_perc",
+      "value": 0.2
+    },
+    "duplicate_cached_blocks": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "gauge",
+      "source": "derived.duplicate_cached_blocks",
+      "value": 2.0
+    },
+    "effective_residency_perc": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "ratio",
+      "source": "derived.effective_residency_perc",
+      "value": 0.8
+    },
+    "free_uncached_blocks": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "gauge",
+      "source": "derived.free_uncached_blocks",
+      "value": 20.0
+    },
+    "hidden_reuse_ready_perc": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "ratio",
+      "source": "derived.hidden_reuse_ready_perc",
+      "value": 0.6
+    },
+    "reusable_cached_blocks": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "gauge",
+      "source": "derived.reusable_cached_blocks",
+      "value": 60.0
+    },
+    "total_blocks": {
+      "has_value": true,
+      "observed_at_unix_millis": 1700000000000,
+      "quality": "fresh",
+      "semantics": "gauge",
+      "source": "derived.total_blocks",
+      "value": 100.0
+    }
+  },
+  "snapshot_hash": "82ac37d4f7a5ac14d743c43d0125d7731e98b28cf11f0f417796d95f24e32ff8"
+}

@@ -1,4 +1,4 @@
-from exporter.prometheus_parse import aggregate_prometheus_text, parse_prometheus_text
+from exporter.prometheus_parse import aggregate_prometheus_text, parse_prometheus_text, parse_prometheus_text_relaxed_lines
 
 
 def test_aggregate_sums_labeled_gauge_series() -> None:
@@ -40,3 +40,26 @@ g 5
     out = aggregate_prometheus_text(text)
     assert "g" in out and out["g"] == 5.0
     assert not any(k.startswith("h") for k in out)
+
+
+def test_relaxed_line_parser_applies_label_filter() -> None:
+    text = """
+g{model="a",pod="1"} 1
+g{model="b",pod="2"} 100
+"""
+    out = parse_prometheus_text_relaxed_lines(text, label_filter={"model": "a"})
+    assert out["g"] == 1.0
+
+
+def test_aggregate_relaxed_fallback_keeps_label_filter(monkeypatch) -> None:
+    text = """
+g{model="a",pod="1"} 1
+g{model="b",pod="2"} 100
+"""
+
+    def _boom(_: str):
+        raise ValueError("broken")
+
+    monkeypatch.setattr("exporter.prometheus_parse.text_string_to_metric_families", _boom)
+    out = aggregate_prometheus_text(text, label_filter={"model": "a"})
+    assert out["g"] == 1.0

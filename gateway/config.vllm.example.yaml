@@ -1,0 +1,14 @@
+tenants:
+  - id: vllm-local
+    api_keys: [replace-with-vllm-key]
+    max_concurrent: 4
+    token_budget: 8192
+    policy_fail_mode: closed
+
+backends:
+  - id: vllm-local
+    url: http://127.0.0.1:8000
+    enabled: true
+    weight: 1
+    models: [kvcache-local-tiny]
+    health_path: /health

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kavora Control Room</title>
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <main class="shell">
+    <nav class="topbar"><div class="brand"><span class="mark">K</span><span>KAVORA</span></div><div class="nav-meta"><span class="pulse"></span><span id="health-label">Gateway connecting</span><span class="build">AI INFRA / LOCAL</span></div></nav>
+    <section class="hero"><div><p class="eyebrow">MODEL ROUTING CONTROL ROOM</p><h1>Make every model call<br><em>accountable.</em></h1><p class="lede">A bilingual gateway for routing, policy, and streaming. Send a request through the same path your agents will use.</p></div><div class="hero-stat"><span class="stat-label">RUNTIME</span><strong>GO <i>×</i> RUST</strong><span>control plane / policy plane</span></div></section>
+    <section class="workspace">
+      <div class="panel composer"><div class="panel-head"><span class="number">01</span><div><h2>Compose request</h2><p>Policy is evaluated before the backend sees it.</p></div></div>
+        <label>API KEY <span class="optional">SESSION ONLY</span><input id="api-key" type="password" autocomplete="off" placeholder="Bearer API key"></label>
+        <label>MODEL<input id="model" value="demo-model"></label>
+        <label>SYSTEM PROMPT <span class="optional">OPTIONAL</span><textarea id="system" rows="2" placeholder="You are a precise assistant."></textarea></label>
+        <label>MESSAGE<textarea id="message" rows="7" placeholder="Ask Kavora something..."></textarea></label>
+        <div class="actions"><button id="send" class="primary">Send request <span>↗</span></button><label class="toggle"><input id="stream" type="checkbox" checked><span></span> Stream response</label></div>
+      </div>
+      <div class="panel response"><div class="panel-head"><span class="number">02</span><div><h2>Observe response</h2><p id="response-meta">Awaiting a request</p></div><span id="decision" class="decision idle">IDLE</span></div><div id="output" class="output"><div class="empty"><div class="empty-glyph">⌁</div><p>Your response will appear here.</p><span>Request ID, policy decision, and stream timing stay visible.</span></div></div><div class="response-foot"><span id="request-id">REQUEST ID —</span><span id="latency">—</span></div></div>
+    </section>
+    <section class="backend-panel"><div class="backend-title"><span class="number">03</span><div><h2>Backend fleet</h2><p>Health and routing candidates refreshed from the gateway.</p></div><span id="backend-refresh">LIVE</span></div><div id="backend-list" class="backend-list"><span class="backend-empty">Loading backend state…</span></div></section>
+    <section class="rail"><div><span class="rail-label">POLICY PLANE</span><strong>Rust incremental scan</strong><span>PII · JSON · token budget</span></div><div><span class="rail-label">CONTROL PLANE</span><strong>Go tenant routing</strong><span>auth · limits · streaming</span></div><div><span class="rail-label">BOUNDARY</span><strong id="health-detail">Checking health…</strong><span>Unix socket → policy engine</span></div></section>
+    <footer><span>KAVORA / CONTROL ROOM</span><span>Built for observable AI infrastructure</span></footer>
+  </main>
+  <script src="/ui/app.js"></script>
+</body>
+</html>

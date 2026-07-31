@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package kavora.backend.v1;
+
+option go_package = "github.com/BokaiGuo-Lincoln/kavora/proto/gen/go/backend/v1;backendv1";
+
+enum SignalQuality {
+  SIGNAL_QUALITY_UNSPECIFIED = 0;
+  SIGNAL_QUALITY_FRESH = 1;
+  SIGNAL_QUALITY_STALE = 2;
+  SIGNAL_QUALITY_MISSING = 3;
+  SIGNAL_QUALITY_INVALID = 4;
+}
+
+message Signal {
+  double value = 1;
+  bool has_value = 2;
+  SignalQuality quality = 3;
+  string source = 4;
+  int64 observed_at_unix_millis = 5;
+  string semantics = 6;
+}
+
+message NamedSignal {
+  string name = 1;
+  Signal signal = 2;
+}
+
+message BackendState {
+  string schema_version = 1;
+  string backend_id = 2;
+  string backend = 3;
+  string model = 4;
+  string instance = 5;
+  string model_group = 6;
+  int64 observed_at_unix_millis = 7;
+  repeated NamedSignal signals = 8;
+  string snapshot_hash = 9;
+}
+
+message BackendStateSnapshot {
+  string schema_version = 1;
+  int64 produced_at_unix_millis = 2;
+  repeated BackendState backends = 3;
+}

@@ -7,6 +7,21 @@ is_pid_running() {
   kill -0 "${pid}" >/dev/null 2>&1
 }
 
+wait_for_pid_exit() {
+  local pid="$1"
+  local timeout_s="${2:-30}"
+  local start_s now_s
+  start_s="$(date +%s)"
+  while is_pid_running "${pid}"; do
+    now_s="$(date +%s)"
+    if [[ $((now_s - start_s)) -ge "${timeout_s}" ]]; then
+      return 1
+    fi
+    sleep 1
+  done
+  return 0
+}
+
 read_pid_file() {
   local pid_file="$1"
   if [[ -f "${pid_file}" ]]; then
@@ -25,7 +40,11 @@ stop_with_pid_file() {
   if is_pid_running "${pid}"; then
     echo "[pid] stopping ${label} pid=${pid}"
     kill "${pid}" >/dev/null 2>&1 || true
-    wait "${pid}" >/dev/null 2>&1 || true
+    if ! wait_for_pid_exit "${pid}" "${STOP_WAIT_MAX_S:-30}"; then
+      echo "[pid] force killing ${label} pid=${pid} after timeout"
+      kill -9 "${pid}" >/dev/null 2>&1 || true
+      wait_for_pid_exit "${pid}" "${STOP_KILL_WAIT_MAX_S:-10}" || true
+    fi
   fi
   rm -f "${pid_file}"
 }
