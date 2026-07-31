@@ -1,27 +1,50 @@
 # Kavora
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 > **Route intelligently. Govern safely. Remember efficiently.**
 
-Kavora 是一个面向本地和私有化大模型推理服务的 **AI Inference Control Plane**。
-它把 Go 的工程效率、Rust 的性能与安全、Python 的观测与实验能力组合成一个真正可运行的系统：
+![Status](https://img.shields.io/badge/status-alpha-orange)
+![Go](https://img.shields.io/badge/Go-gateway-00ADD8?logo=go&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-policy%20%26%20runtime-000000?logo=rust&logoColor=white)
+![Python](https://img.shields.io/badge/Python-observability%20%26%20research-3776AB?logo=python&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-66%20passing-2ea44f)
 
-- **Go**：OpenAI-compatible Gateway、租户、限流、健康检查、负载均衡、CLI 与 GUI
-- **Rust**：PII/内容策略、JSON/SSE 增量解析、Token budget、cache key、Wasmtime worker
-- **Python**：vLLM/SGLang 指标归一化、backend-state、调优建议、可复现实验与论文式报告
+Kavora is an open-source **AI inference control plane** for local and private LLM serving.
 
-Kavora 的名字来自 **KV + Agora**：KV 代表 KV cache、prefix reuse 和推理运行时状态；Agora 代表请求、模型、策略、指标和工具汇聚并接受治理的基础设施中心。
+It combines three deliberately separated layers:
 
-## Why Kavora?
+- **Go** — OpenAI-compatible Gateway, tenant controls, routing, streaming, CLI, and GUI.
+- **Rust** — PII/content policy, incremental JSON/SSE inspection, token budgets, cache keys, and Wasmtime execution.
+- **Python** — vLLM/SGLang metric normalization, backend state, tuning advice, reproducible experiments, and reports.
 
-Kavora 不只是一个 Gateway Demo，也不只是一个 KV Cache Exporter。它同时服务三个目标：
+The name **Kavora** combines **KV**—KV cache, prefix reuse, and inference runtime state—with **Agora**—a shared control space where requests, models, policies, metrics, and tools are governed.
 
-| 目标 | Kavora 提供的能力 |
+## Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Operations](#operations)
+- [Research Workflow](#research-workflow)
+- [Development](#development)
+- [Project Status](#project-status)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Security](#security)
+
+## Overview
+
+Kavora is designed to be useful in three contexts:
+
+| Context | Outcome |
 |---|---|
-| **求职展示** | GUI/CLI、真实 Go/Rust 边界、Unix Socket/gRPC、流式策略、故障演示 |
-| **真实可用** | 长期监控 vLLM/SGLang、backend-state、调优建议、安全路由与 static fallback |
-| **研究实验** | 固定 seed/config/model/hardware、策略矩阵、replay、promotion gate、论文式报告 |
+| **Engineering showcase** | A visible Go/Rust boundary, GUI/CLI, streaming policy enforcement, and failure demonstrations. |
+| **Local operations** | Continuous monitoring, quality-aware state, tuning advice, health checks, failover, and safe routing. |
+| **Research** | Reproducible workloads, strategy comparisons, replay artifacts, promotion gates, and paper-style reports. |
 
-详细验收标准见 [`docs/three_goals.md`](docs/three_goals.md)。
+See [`docs/three_goals.md`](docs/three_goals.md) for the product acceptance criteria. The project is currently **alpha**: the end-to-end control plane is implemented and tested, while performance claims remain evidence-bound.
 
 ## Architecture
 
@@ -52,9 +75,24 @@ flowchart LR
 5. Gateway preserves unary/SSE semantics and records metrics/audit events.
 6. Python Observer turns backend metrics into quality-aware state and tuning advice.
 
-## 10-Minute Showcase
+## Features
 
-### One-command demo
+- OpenAI-compatible unary and SSE chat completions.
+- Tenant authentication, concurrency limits, token budgets, and policy fail modes.
+- Rust policy evaluation over Unix Socket or gRPC.
+- Incremental JSON and SSE inspection with bounded streaming buffers.
+- PII and content filtering before backend dispatch and during streaming responses.
+- Backend health checks, model matching, weighted candidates, and failover.
+- Static, shadow, and enforced routing with stale/missing state fallback.
+- Tenant-scoped prefix affinity with TTL and capacity bounds.
+- Prometheus metrics, JSON audit events, request IDs, and an embedded GUI.
+- Versioned backend-state snapshots and persistent tuning advice.
+- Digest-verified Wasmtime execution with resource and capability controls.
+- Reproducible benchmarks, replay artifacts, promotion gates, and Markdown/JSON reports.
+
+## Quick Start
+
+### One-command showcase
 
 The showcase starts a deterministic fake backend, Rust Policy Engine and Go Gateway, then demonstrates CLI unary chat, SSE streaming, backend status and PII rejection:
 
@@ -238,3 +276,19 @@ The latest local validation passed with **66 Python tests**, Go race/vet, Rust t
 ## Status
 
 Kavora is an actively developed alpha. The end-to-end control plane, monitoring/advice loop, showcase demo and reproducible research report pipeline are implemented. Performance claims remain evidence-bound: the system reports what was measured and does not turn a smoke test into a throughput claim.
+
+## Contributing
+
+Contributions are welcome. Please keep changes focused, preserve the Go/Rust protocol contracts, add tests for behavior changes, and update the relevant benchmark or documentation artifact when changing observable behavior.
+
+Before opening a pull request, run:
+
+```bash
+python3 -m pytest -q
+go test -race ./gateway/...
+cargo test --manifest-path policy-engine/Cargo.toml
+```
+
+## Security
+
+Do not include real API keys, private model paths, customer prompts, or production traces in issues or pull requests. Review [`docs/tool_manifest.md`](docs/tool_manifest.md) and [`docs/project_status.md`](docs/project_status.md) before enabling experimental tool execution or enforced routing.
