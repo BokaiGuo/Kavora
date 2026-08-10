@@ -78,10 +78,13 @@ flowchart LR
 - 可复现 benchmark、replay、promotion gate 以及 JSON/Markdown 报告。
 - 指标语义对齐、SLO 自动阈值/并发校准，以及匿名 workload 的 canary 前回放。
 - 结果闭环：真实 TTFT/E2E/状态/token/cache outcome、prediction error、持久化 JSONL、可解释预测器拟合、漂移门禁、原生 vLLM KV-event 恢复和多策略回放。
+- 因果实验控制：vLLM 请求/block hash 对齐、switchback 与隔离后端池分配、实验账本、按窗口 bootstrap CI、workload 分层评估和 promotion gate。
 
 缓存证据契约、决策 API、生命周期配置与 fidelity/lag 消融见 [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md)。
 指标真值、自动校准、匿名回放、人工审批与回滚见 [`docs/stage5_self_tuning.md`](docs/stage5_self_tuning.md)。
 决策结果账本、预测器校准、原生 KV events、prediction quality 与 policy laboratory 见 [`docs/stage6_outcome_grounded_control.md`](docs/stage6_outcome_grounded_control.md)。
+
+在线实验分配、因果 policy evaluation、exact hash alignment 和 held-out predictor validation 见 [`docs/stage7_causal_policy_evaluation.md`](docs/stage7_causal_policy_evaluation.md)。
 
 ## 快速开始
 

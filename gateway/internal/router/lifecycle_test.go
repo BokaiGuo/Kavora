@@ -77,3 +77,18 @@ func TestLifecycleRollsBackOnPredictionOrEvidenceDrift(t *testing.T) {
 		t.Fatalf("snapshot=%+v", snapshot)
 	}
 }
+
+func TestLifecycleRequiresCausalExperimentPromotionWhenConfigured(t *testing.T) {
+	lifecycle, err := NewLifecycle(LifecycleConfig{Enabled: true, MinRequests: 10, Gates: LifecycleGates{RequireExperimentPromotion: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := lifecycle.Observe(LifecycleObservation{Requests: 10, StateHealthy: true, PolicyHealthy: true})
+	if failed.Stage != StageStatic || failed.LastReason != "experiment_promotion_gate_failed" {
+		t.Fatalf("snapshot=%+v", failed)
+	}
+	passed := lifecycle.Observe(LifecycleObservation{Requests: 10, StateHealthy: true, PolicyHealthy: true, ExperimentPromotionEligible: true, ExperimentIntegrityHealthy: true})
+	if passed.Stage != StageShadow || passed.LastReason != "quality_gates_passed" {
+		t.Fatalf("snapshot=%+v", passed)
+	}
+}

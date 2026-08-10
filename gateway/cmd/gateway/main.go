@@ -18,6 +18,7 @@ import (
 
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/backend"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/backendstate"
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/experiment"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/gateway"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/policyclient"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/router"
@@ -84,6 +85,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var cacheKeyResolver gateway.CacheKeyResolver
+	if resolverURL := os.Getenv("KAVORA_VLLM_HASH_RESOLVER_URL"); resolverURL != "" {
+		cacheKeyResolver, err = gateway.NewHTTPVLLMCacheKeyResolver(resolverURL, &http.Client{Timeout: 5 * time.Second})
+		if err != nil {
+			return err
+		}
+	}
 	handler, err := gateway.New(gateway.Config{
 		BackendURL:        backendURL,
 		Policy:            policy,
@@ -98,6 +106,7 @@ func run() error {
 		Metrics:           metrics,
 		Audit:             audit,
 		Router:            kvRouter,
+		CacheKeyResolver:  cacheKeyResolver,
 	})
 	if err != nil {
 		return err
@@ -262,6 +271,17 @@ func loadRouter() (*router.Controller, error) {
 			return nil, err
 		}
 		controller.SetLifecycle(lifecycle)
+	}
+	if experimentPath := os.Getenv("KAVORA_EXPERIMENT_CONFIG"); experimentPath != "" {
+		data, err := os.ReadFile(experimentPath)
+		if err != nil {
+			return nil, fmt.Errorf("read experiment config: %w", err)
+		}
+		experimentController, err := experiment.Load(data)
+		if err != nil {
+			return nil, err
+		}
+		controller.SetExperiment(experimentController)
 	}
 	path := os.Getenv("KAVORA_BACKEND_STATE_FILE")
 	if path == "" {

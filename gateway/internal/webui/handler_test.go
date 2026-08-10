@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/experiment"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/router"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/telemetry"
 )
@@ -79,6 +80,28 @@ func TestHandlerServesPredictionQuality(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"mae_ms":30`) {
+		t.Fatalf("response=%d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestHandlerServesExperimentConfiguration(t *testing.T) {
+	experimentController, err := experiment.New(experiment.Config{
+		ID:        "exp",
+		Control:   experiment.Arm{Policy: "static", BackendPool: []string{"gpu-0"}},
+		Treatment: experiment.Arm{Policy: "kv-v2", BackendPool: []string{"gpu-1"}},
+		Design:    experiment.Design{Type: "isolated-pool", Seed: "seed"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller := router.NewController(router.ModeStatic, nil)
+	controller.SetExperiment(experimentController)
+	handler := NewWithControlPlane(http.NotFoundHandler(), nil, nil, nil, controller, "secret")
+	request := httptest.NewRequest(http.MethodGet, "/v1/admin/experiment", nil)
+	request.Header.Set("Authorization", "Bearer secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"id":"exp"`) {
 		t.Fatalf("response=%d %q", response.Code, response.Body.String())
 	}
 }

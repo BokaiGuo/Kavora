@@ -10,3 +10,4 @@ gates:
   max_slo_violation_rate: 0.05
   max_prediction_mae_ms: 25
   max_evidence_error_rate: 0.10
+  require_experiment_promotion: false

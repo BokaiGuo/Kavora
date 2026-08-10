@@ -18,12 +18,13 @@ const (
 )
 
 type LifecycleGates struct {
-	MaxP95RegressionPercent float64 `yaml:"max_p95_regression_percent" json:"max_p95_regression_percent"`
-	MaxErrorDelta           float64 `yaml:"max_error_delta" json:"max_error_delta"`
-	MaxFallbackRate         float64 `yaml:"max_fallback_rate" json:"max_fallback_rate"`
-	MaxSLOViolationRate     float64 `yaml:"max_slo_violation_rate" json:"max_slo_violation_rate"`
-	MaxPredictionMAEMS      float64 `yaml:"max_prediction_mae_ms" json:"max_prediction_mae_ms"`
-	MaxEvidenceErrorRate    float64 `yaml:"max_evidence_error_rate" json:"max_evidence_error_rate"`
+	MaxP95RegressionPercent    float64 `yaml:"max_p95_regression_percent" json:"max_p95_regression_percent"`
+	MaxErrorDelta              float64 `yaml:"max_error_delta" json:"max_error_delta"`
+	MaxFallbackRate            float64 `yaml:"max_fallback_rate" json:"max_fallback_rate"`
+	MaxSLOViolationRate        float64 `yaml:"max_slo_violation_rate" json:"max_slo_violation_rate"`
+	MaxPredictionMAEMS         float64 `yaml:"max_prediction_mae_ms" json:"max_prediction_mae_ms"`
+	MaxEvidenceErrorRate       float64 `yaml:"max_evidence_error_rate" json:"max_evidence_error_rate"`
+	RequireExperimentPromotion bool    `yaml:"require_experiment_promotion" json:"require_experiment_promotion"`
 }
 
 type LifecycleConfig struct {
@@ -36,15 +37,17 @@ type LifecycleConfig struct {
 }
 
 type LifecycleObservation struct {
-	Requests             int     `json:"requests"`
-	P95RegressionPercent float64 `json:"p95_regression_percent"`
-	ErrorDelta           float64 `json:"error_delta"`
-	FallbackRate         float64 `json:"fallback_rate"`
-	SLOViolationRate     float64 `json:"slo_violation_rate"`
-	StateHealthy         bool    `json:"state_healthy"`
-	PolicyHealthy        bool    `json:"policy_healthy"`
-	PredictionMAEMS      float64 `json:"prediction_mae_ms"`
-	EvidenceErrorRate    float64 `json:"evidence_error_rate"`
+	Requests                    int     `json:"requests"`
+	P95RegressionPercent        float64 `json:"p95_regression_percent"`
+	ErrorDelta                  float64 `json:"error_delta"`
+	FallbackRate                float64 `json:"fallback_rate"`
+	SLOViolationRate            float64 `json:"slo_violation_rate"`
+	StateHealthy                bool    `json:"state_healthy"`
+	PolicyHealthy               bool    `json:"policy_healthy"`
+	PredictionMAEMS             float64 `json:"prediction_mae_ms"`
+	EvidenceErrorRate           float64 `json:"evidence_error_rate"`
+	ExperimentPromotionEligible bool    `json:"experiment_promotion_eligible"`
+	ExperimentIntegrityHealthy  bool    `json:"experiment_integrity_healthy"`
 }
 
 type LifecycleSnapshot struct {
@@ -156,6 +159,10 @@ func (lifecycle *Lifecycle) Observe(observation LifecycleObservation) LifecycleS
 	}
 	if (gates.MaxPredictionMAEMS > 0 && observation.PredictionMAEMS > gates.MaxPredictionMAEMS) || (gates.MaxEvidenceErrorRate > 0 && observation.EvidenceErrorRate > gates.MaxEvidenceErrorRate) {
 		lifecycle.stage, lifecycle.step, lifecycle.lastReason, lifecycle.approved, lifecycle.approvedBy = StageStatic, 0, "prediction_or_evidence_drift", false, ""
+		return lifecycle.snapshotLocked()
+	}
+	if gates.RequireExperimentPromotion && (!observation.ExperimentPromotionEligible || !observation.ExperimentIntegrityHealthy) {
+		lifecycle.stage, lifecycle.step, lifecycle.lastReason, lifecycle.approved, lifecycle.approvedBy = StageStatic, 0, "experiment_promotion_gate_failed", false, ""
 		return lifecycle.snapshotLocked()
 	}
 	if lifecycle.stage == StageShadow && lifecycle.config.RequireHumanApproval && !lifecycle.approved {

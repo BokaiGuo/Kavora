@@ -1,4 +1,4 @@
-.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor vllm-kv-events stage2-local demo-stage1 demo-kavora stage1-gate research-report
+.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report
 
 GO ?= go
 CARGO ?= cargo
@@ -79,9 +79,21 @@ fit-predictor:
 	@test -n "$(INPUT)" -a -n "$(MODEL)" -a -n "$(GPU_TYPE)" -a -n "$(BACKEND_ENGINE)" -a -n "$(BACKEND_VERSION)" || (echo "usage: make fit-predictor INPUT=results/state MODEL=... GPU_TYPE=... BACKEND_ENGINE=vllm BACKEND_VERSION=..."; exit 1)
 	$(PYTHON) -m planner.ttft_predictor --input "$(INPUT)" --out "$${OUT:-results/calibration/ttft-predictor.json}" --model "$(MODEL)" --gpu-type "$(GPU_TYPE)" --backend-engine "$(BACKEND_ENGINE)" --backend-version "$(BACKEND_VERSION)"
 
+validate-predictor:
+	@test -n "$(INPUT)" -a -n "$(ARTIFACT)" || (echo "usage: make validate-predictor INPUT=results/state/held-out ARTIFACT=results/calibration/ttft-predictor.json"; exit 1)
+	$(PYTHON) -m planner.ttft_validation --input "$(INPUT)" --artifact "$(ARTIFACT)" --out "$${OUT:-results/calibration/ttft-validation.json}" --report "$${REPORT:-results/calibration/ttft-validation.md}"
+
+policy-evaluation:
+	@test -n "$(INPUT)" -a -n "$(EXPERIMENT_ID)" -a -n "$(CONTROL)" -a -n "$(TREATMENT)" || (echo "usage: make policy-evaluation INPUT=results/state EXPERIMENT_ID=... CONTROL=static TREATMENT=kv-v2"; exit 1)
+	$(PYTHON) -m planner.policy_evaluation --input "$(INPUT)" --experiment-id "$(EXPERIMENT_ID)" --control "$(CONTROL)" --treatment "$(TREATMENT)" $${SLO_MS:+--slo-ms "$$SLO_MS"} $${MIN_REQUESTS:+--min-requests "$$MIN_REQUESTS"} $${OUT:+--out "$$OUT"} $${REPORT:+--report "$$REPORT"}
+
 vllm-kv-events:
 	@test -n "$(BACKEND_ID)" -a -n "$(GENERATION)" -a -n "$(ENDPOINT)" -a -n "$(REPLAY_ENDPOINT)" || (echo "usage: make vllm-kv-events BACKEND_ID=... GENERATION=... ENDPOINT=tcp://127.0.0.1:5557 REPLAY_ENDPOINT=tcp://127.0.0.1:5558"; exit 1)
 	$(PYTHON) -m engine_events.vllm --backend-id "$(BACKEND_ID)" --generation "$(GENERATION)" --endpoint "$(ENDPOINT)" --replay-endpoint "$(REPLAY_ENDPOINT)" $${GATEWAY_URL:+--gateway-url "$$GATEWAY_URL"}
+
+vllm-hash-resolver:
+	@test -n "$(TOKENIZE_URL)" || (echo "usage: make vllm-hash-resolver TOKENIZE_URL=http://127.0.0.1:8000 BLOCK_SIZE=16 PYTHONHASHSEED=7"; exit 1)
+	PYTHONHASHSEED="$${PYTHONHASHSEED:-7}" $(PYTHON) -m engine_events.vllm_hash --tokenize-url "$(TOKENIZE_URL)" --block-size "$${BLOCK_SIZE:-16}" --hash-algo "$${HASH_ALGO:-sha256_cbor}" --python-hash-seed "$${PYTHONHASHSEED:-7}" $${PORT:+--port "$$PORT"}
 
 stage2-local:
 	bash scripts/stage2_local_stack.sh run

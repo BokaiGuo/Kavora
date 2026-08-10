@@ -4,6 +4,8 @@
 
 ### Added
 
+- Added Stage 7 switchback and isolated-pool experiments, assignment metadata, cluster-bootstrap policy evaluation, workload strata, causal lifecycle gates, and held-out predictor validation.
+- Added vLLM request-to-external-block-hash alignment using the backend `/tokenize` API and vLLM's own hash implementation, including exact longest-prefix routing evidence.
 - Added Stage 6 decision/outcome records with realized TTFT, E2E, status, token/cache observations, prediction errors, JSONL persistence, and restart recovery.
 - Added explainable TTFT predictor fitting/loading, prediction-quality API/GUI, calibration drift lifecycle gates, native vLLM KV-event replay recovery, and a multi-policy replay laboratory.
 - Added backend semantic alignment with `strict`, `estimated`, `fallback`, and `missing` evidence quality across exporter snapshots, Prometheus self-checks, planner artifacts, advice, and routing decisions.

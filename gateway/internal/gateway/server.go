@@ -44,6 +44,7 @@ type Config struct {
 	Metrics           *telemetry.Metrics
 	Audit             *telemetry.AuditLogger
 	Router            *router.Controller
+	CacheKeyResolver  CacheKeyResolver
 }
 
 type Server struct {
@@ -61,6 +62,7 @@ type Server struct {
 	metrics           *telemetry.Metrics
 	audit             *telemetry.AuditLogger
 	router            *router.Controller
+	cacheKeyResolver  CacheKeyResolver
 	tenants           *tenant.Registry
 	limiter           *limits.Limiter
 }
@@ -114,6 +116,7 @@ func New(config Config) (*Server, error) {
 		metrics:           metricsOrDefault(config.Metrics),
 		audit:             config.Audit,
 		router:            config.Router,
+		cacheKeyResolver:  config.CacheKeyResolver,
 		tenants:           config.Tenants,
 		limiter:           limiter,
 	}, nil
@@ -268,9 +271,22 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	if result != nil && result.EstimatedTokens <= uint64(math.MaxInt) {
 		promptTokens = int(result.EstimatedTokens)
 	}
+	externalCacheKeys := []string(nil)
+	if server.cacheKeyResolver != nil {
+		resolved, resolveErr := server.cacheKeyResolver.Resolve(ctx, rawBody)
+		if resolveErr == nil {
+			externalCacheKeys = resolved.CacheKeys
+			if resolved.TokenCount > 0 {
+				promptTokens = resolved.TokenCount
+			}
+			writer.Header().Set("X-Kavora-Hash-Alignment", "vllm-exact")
+		} else {
+			writer.Header().Set("X-Kavora-Hash-Alignment", "unavailable")
+		}
+	}
 	realized.promptTokens = promptTokens
 	realized.model = policyRequest.Request.Model
-	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant, cacheKey, promptTokens, stream, &realized)
+	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant, cacheKey, externalCacheKeys, promptTokens, stream, &realized)
 }
 
 func metricsOrDefault(metrics *telemetry.Metrics) *telemetry.Metrics {
@@ -424,6 +440,7 @@ func (server *Server) forward(
 	requestID string,
 	activeTenant tenant.Tenant,
 	cacheKey string,
+	externalCacheKeys []string,
 	promptTokens int,
 	stream bool,
 	realized *requestOutcomeObservation,
@@ -459,7 +476,7 @@ func (server *Server) forward(
 		}
 	}
 
-	candidates, routingDecision := server.backendCandidates(requestID, activeTenant, cacheKey, promptTokens, policyRequest.Request.Model)
+	candidates, routingDecision := server.backendCandidates(requestID, activeTenant, cacheKey, externalCacheKeys, promptTokens, policyRequest.Request.Model)
 	realized.routed = true
 	writer.Header().Set("X-Kavora-Routing-Mode", routingDecision.Mode)
 	writer.Header().Set("X-Kavora-Routing-Fallback", strconv.FormatBool(routingDecision.Fallback))
@@ -530,7 +547,7 @@ func (server *Server) forward(
 	writeGatewayError(writer, http.StatusBadGateway, "BACKEND_UNAVAILABLE", "all candidate backends failed before response", requestID)
 }
 
-func (server *Server) backendCandidates(requestID string, activeTenant tenant.Tenant, cacheKey string, promptTokens int, model string) ([]backend.Backend, router.Decision) {
+func (server *Server) backendCandidates(requestID string, activeTenant tenant.Tenant, cacheKey string, externalCacheKeys []string, promptTokens int, model string) ([]backend.Backend, router.Decision) {
 	var candidates []backend.Backend
 	if server.backends != nil {
 		candidates = server.backends.Candidates(model)
@@ -545,7 +562,7 @@ func (server *Server) backendCandidates(requestID string, activeTenant tenant.Te
 		descriptors = append(descriptors, router.BackendDescriptor{ID: candidate.ID, Attributes: candidate.Attributes})
 	}
 	decision := server.router.Plan(context.Background(), router.RoutingRequest{
-		RequestID: requestID, TenantID: activeTenant.ID, Model: model, CacheKey: cacheKey, PromptTokens: promptTokens,
+		RequestID: requestID, TenantID: activeTenant.ID, Model: model, CacheKey: cacheKey, ExternalCacheKeys: externalCacheKeys, PromptTokens: promptTokens,
 		Requirements: activeTenant.RoutingRequirements, TTFTSLOMS: activeTenant.TTFTSLOMS,
 	}, descriptors)
 	eligible := map[string]bool{}

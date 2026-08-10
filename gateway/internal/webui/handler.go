@@ -87,6 +87,18 @@ func NewWithControlPlane(gateway http.Handler, metrics *telemetry.Metrics, ready
 			}
 			writeJSON(writer, http.StatusOK, controller.PredictionQuality(limit, sloMS))
 		}))
+		mux.HandleFunc("/v1/admin/experiment", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet {
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			experimentController := controller.Experiment()
+			if experimentController == nil {
+				http.Error(writer, "experiment unavailable", http.StatusNotImplemented)
+				return
+			}
+			writeJSON(writer, http.StatusOK, experimentController.Config())
+		}))
 		mux.HandleFunc("/v1/admin/lifecycle", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
 			lifecycle := controller.Lifecycle()
 			if lifecycle == nil {

@@ -10,16 +10,18 @@ import (
 	"time"
 
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/backendstate"
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/experiment"
 )
 
 type RoutingRequest struct {
-	RequestID    string
-	TenantID     string
-	Model        string
-	CacheKey     string
-	PromptTokens int
-	Requirements map[string]string
-	TTFTSLOMS    float64
+	RequestID         string
+	TenantID          string
+	Model             string
+	CacheKey          string
+	ExternalCacheKeys []string
+	PromptTokens      int
+	Requirements      map[string]string
+	TTFTSLOMS         float64
 }
 
 type BackendDescriptor struct {
@@ -83,6 +85,7 @@ type Controller struct {
 	predictor   TTFTPredictor
 	ledger      *DecisionLedger
 	lifecycle   *Lifecycle
+	experiment  *experiment.Controller
 	maxStateAge time.Duration
 	stateLambda float64
 	now         func() time.Time
@@ -146,6 +149,16 @@ func (c *Controller) SetLifecycle(lifecycle *Lifecycle) {
 	defer c.mu.Unlock()
 	c.lifecycle = lifecycle
 }
+func (c *Controller) SetExperiment(controller *experiment.Controller) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.experiment = controller
+}
+func (c *Controller) Experiment() *experiment.Controller {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.experiment
+}
 func (c *Controller) Lifecycle() *Lifecycle { c.mu.RLock(); defer c.mu.RUnlock(); return c.lifecycle }
 func (c *Controller) Ledger() *DecisionLedger {
 	c.mu.RLock()
@@ -172,18 +185,18 @@ func (c *Controller) PredictionQuality(limit int, sloMS float64) PredictionQuali
 	return ledger.PredictionQuality(limit, sloMS)
 }
 
-func (c *Controller) snapshot() (Mode, time.Duration, map[string]backendstate.Snapshot, CacheStateProvider, TTFTPredictor, *Lifecycle, func() time.Time) {
+func (c *Controller) snapshot() (Mode, time.Duration, map[string]backendstate.Snapshot, CacheStateProvider, TTFTPredictor, *Lifecycle, *experiment.Controller, func() time.Time) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	states := make(map[string]backendstate.Snapshot, len(c.states))
 	for id, state := range c.states {
 		states[id] = state
 	}
-	return c.mode, c.maxStateAge, states, c.provider, c.predictor, c.lifecycle, c.now
+	return c.mode, c.maxStateAge, states, c.provider, c.predictor, c.lifecycle, c.experiment, c.now
 }
 
 func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends []BackendDescriptor) Decision {
-	mode, maxStateAge, states, provider, predictor, lifecycle, nowFn := c.snapshot()
+	mode, maxStateAge, states, provider, predictor, lifecycle, experimentController, nowFn := c.snapshot()
 	now := nowFn().UTC()
 	stage, fraction, enforced, version := string(mode), 1.0, mode == ModeEnforced || mode == ModeLoadAware, "routing-v1"
 	if lifecycle != nil {
@@ -196,6 +209,34 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 			mode = ModeShadow
 		} else {
 			mode = ModeEnforced
+		}
+	}
+	assignedPolicy := ""
+	backendPool := map[string]bool(nil)
+	assignment := experiment.Assignment{}
+	if experimentController != nil {
+		if lifecycle != nil && !enforced {
+			assignment = experimentController.ControlAssignment("lifecycle_not_enforced")
+		} else {
+			assignment = experimentController.Assign(request.RequestID, now)
+		}
+		assignedPolicy = assignment.AssignedPolicy
+		backendPool = make(map[string]bool, len(assignment.BackendPool))
+		for _, backendID := range assignment.BackendPool {
+			backendPool[backendID] = true
+		}
+		switch assignedPolicy {
+		case "static":
+			mode = ModeStatic
+		case "load-aware":
+			mode = ModeLoadAware
+		case "kv-v1", "kv-v2":
+			mode = ModeEnforced
+		}
+		if lifecycle == nil {
+			enforced = mode == ModeEnforced || mode == ModeLoadAware
+		} else {
+			enforced = enforced && (mode == ModeEnforced || mode == ModeLoadAware)
 		}
 	}
 	requirements := cloneMap(request.Requirements)
@@ -211,10 +252,29 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 	decision := Decision{
 		RequestID: request.RequestID, TenantID: request.TenantID, CacheKey: request.CacheKey, PolicyVersion: version, Mode: string(mode), Stage: stage,
 		Enforced: enforced, CanaryFraction: fraction, Requirements: requirements, Fallback: true,
-		Reason: "no_usable_backend_state", OccurredAt: now,
+		Reason: "no_usable_backend_state", OccurredAt: now, ExternalCacheKeyCount: len(request.ExternalCacheKeys),
+	}
+	if assignment.ExperimentID != "" {
+		decision.ExperimentID = assignment.ExperimentID
+		decision.AssignedPolicy = assignment.AssignedPolicy
+		decision.AssignmentUnit = assignment.AssignmentUnit
+		decision.AssignmentProbability = assignment.AssignmentProbability
+		decision.AssignmentSeed = assignment.AssignmentSeed
+		decision.ExperimentWindow = assignment.ExperimentWindow
+		decision.Warmup = assignment.Warmup
+		decision.CarryoverGuard = assignment.CarryoverGuard
+		decision.ExperimentActive = assignment.ExperimentActive
+		decision.ExperimentStopReason = assignment.StopReason
+	}
+	if len(request.ExternalCacheKeys) > 0 {
+		decision.HashAlignment = "vllm_external_block_hash"
 	}
 	for _, backend := range backends {
 		candidate := Candidate{BackendID: backend.ID, Eligible: true, CacheSource: CacheSourceNone, CacheQuality: QualityMissing, Reason: "eligible"}
+		if len(backendPool) > 0 && !backendPool[backend.ID] {
+			candidate.Eligible = false
+			candidate.ExcludedBy = append(candidate.ExcludedBy, "experiment_backend_pool")
+		}
 		for key, required := range request.Requirements {
 			if backend.Attributes[key] != required {
 				candidate.Eligible = false
@@ -250,7 +310,7 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 				candidate.KVPressure = 1 - clamp01(coldFree)
 			}
 		}
-		evidence := provider.Match(ctx, CacheMatchRequest{RequestID: request.RequestID, TenantID: request.TenantID, CacheKey: request.CacheKey, PromptTokens: request.PromptTokens}, CacheBackend{ID: backend.ID, State: state})
+		evidence := provider.Match(ctx, CacheMatchRequest{RequestID: request.RequestID, TenantID: request.TenantID, CacheKey: request.CacheKey, ExternalCacheKeys: request.ExternalCacheKeys, PromptTokens: request.PromptTokens}, CacheBackend{ID: backend.ID, State: state})
 		if evidence.EvidenceQuality == "" {
 			evidence.EvidenceQuality = "missing"
 		}
@@ -262,6 +322,7 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 			effectivePredictor = DefaultTTFTPredictor()
 		}
 		candidate.PredictorVersion = effectivePredictor.Version
+		candidate.QueuePenaltyMS = effectivePredictor.QueuePenaltyMS
 		candidate.PredictedTTFTMS = effectivePredictor.Predict(request.PromptTokens, evidence.MatchedTokens, candidate.QueueDepth, candidate.KVPressure, candidate.RecentPrefillRate)
 		candidate.SLOViolationProbability = effectivePredictor.ViolationProbability(candidate.PredictedTTFTMS, request.TTFTSLOMS)
 		confidence := evidence.Confidence
@@ -271,6 +332,9 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 		candidate.Score = confidence * (evidence.MatchRatio*100 - candidate.QueueDepth*8 - candidate.KVPressure*35 - candidate.SLOViolationProbability*60)
 		candidate.Reason = "confidence_weighted_cache_queue_slo"
 		decision.Candidates = append(decision.Candidates, candidate)
+	}
+	if assignedPolicy == "kv-v2" {
+		applyKVV2QueueVeto(decision.Candidates)
 	}
 	sortCandidates(decision.Candidates)
 	decision.PredictorVersion = predictorVersions(decision.Candidates)
@@ -305,6 +369,31 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 	return decision
 }
 
+func applyKVV2QueueVeto(candidates []Candidate) {
+	leastQueue := math.Inf(1)
+	for _, candidate := range candidates {
+		if candidate.Eligible && candidate.QueueDepth < leastQueue {
+			leastQueue = candidate.QueueDepth
+		}
+	}
+	for index := range candidates {
+		candidate := &candidates[index]
+		if !candidate.Eligible || candidate.MatchedTokens <= 0 || candidate.QueueDepth <= leastQueue {
+			continue
+		}
+		prefillRate := candidate.RecentPrefillRate
+		if prefillRate <= 0 {
+			prefillRate = 8000
+		}
+		cacheBenefitMS := float64(candidate.MatchedTokens) / prefillRate * 1000
+		queuePenaltyMS := (candidate.QueueDepth - leastQueue) * candidate.QueuePenaltyMS
+		if queuePenaltyMS > cacheBenefitMS {
+			candidate.Score -= 1_000_000
+			candidate.Reason = "queue_penalty_exceeds_cache_benefit"
+		}
+	}
+}
+
 func predictorVersions(candidates []Candidate) string {
 	version := ""
 	for _, candidate := range candidates {
@@ -323,7 +412,7 @@ func predictorVersions(candidates []Candidate) string {
 }
 
 func (c *Controller) Decide(requestID, tenantID, cacheKey string) Decision {
-	mode, maxStateAge, states, _, _, _, nowFn := c.snapshot()
+	mode, maxStateAge, states, _, _, _, _, nowFn := c.snapshot()
 	now := nowFn()
 	for id, state := range states {
 		if maxStateAge > 0 && now.Sub(time.UnixMilli(state.ObservedAtUnixMillis)) > maxStateAge {

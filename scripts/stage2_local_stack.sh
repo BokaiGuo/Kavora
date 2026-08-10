@@ -20,6 +20,8 @@ STATIC_PORT="${STATIC_PORT:-18100}"
 LOAD_PORT="${LOAD_PORT:-18101}"
 SHADOW_PORT="${SHADOW_PORT:-18102}"
 ENFORCED_PORT="${ENFORCED_PORT:-18103}"
+HASH_RESOLVER_PORT="${HASH_RESOLVER_PORT:-19120}"
+ADMIN_TOKEN="${KAVORA_ADMIN_TOKEN:-stage2-admin-token}"
 
 mkdir -p "$PID_DIR" "$LOG_DIR" "$CONFIG_DIR"
 
@@ -36,7 +38,7 @@ wait_http() {
 }
 
 stop_stack() {
-  for name in gateway-enforced gateway-shadow gateway-load gateway-static exporter-b exporter-a policy; do
+  for name in kv-events-b kv-events-a hash-resolver gateway-enforced gateway-shadow gateway-load gateway-static exporter-b exporter-a policy; do
     stop_with_pid_file "$PID_DIR/$name.pid" "$name"
   done
   bash "${ROOT}/scripts/launch_stage2_vllm_pair.sh" stop
@@ -66,12 +68,20 @@ backends:
     weight: 1
     models: ["$MODEL_NAME"]
     health_path: /health
+    attributes:
+      gpu_type: "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
+      engine: vllm
+      engine_version: "$backend_version"
   - id: gpu-1
     url: http://127.0.0.1:${PORT_B:-18081}
     enabled: true
     weight: 1
     models: ["$MODEL_NAME"]
     health_path: /health
+    attributes:
+      gpu_type: "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
+      engine: vllm
+      engine_version: "$backend_version"
 EOF
   cat >"$CONFIG_DIR/evaluation.yaml" <<EOF
 model: $MODEL_NAME
@@ -108,6 +118,18 @@ start_gateway() {
     "cd \"$ROOT\" && exec env KAVORA_TENANT_CONFIG=\"$CONFIG_DIR/gateway.yaml\" KAVORA_POLICY_SOCKET=\"$POLICY_SOCKET\" KAVORA_GATEWAY_LISTEN=127.0.0.1:$port KAVORA_ROUTING_MODE=\"$mode\" KAVORA_BACKEND_STATE_URLS=\"http://127.0.0.1:$EXPORTER_A_PORT/backend-state http://127.0.0.1:$EXPORTER_B_PORT/backend-state\" \"$ROOT/build/kavora-gateway\" >\"$LOG_DIR/$name.log\" 2>&1"
 }
 
+start_hash_resolver() {
+  start_with_pid_file "$PID_DIR/hash-resolver.pid" bash -lc \
+    "cd \"$ROOT\" && exec env PYTHONHASHSEED=${PYTHON_HASH_SEED:-7} python3 -m engine_events.vllm_hash --tokenize-url http://127.0.0.1:${PORT_A:-18080} --block-size ${BLOCK_SIZE:-16} --hash-algo sha256_cbor --python-hash-seed ${PYTHON_HASH_SEED:-7} --port $HASH_RESOLVER_PORT >\"$LOG_DIR/hash-resolver.log\" 2>&1"
+}
+
+start_kv_subscriber() {
+  local name="$1" backend_id="$2" event_port="$3" replay_port="$4" generation
+  generation="$(cat /proc/sys/kernel/random/uuid)"
+  start_with_pid_file "$PID_DIR/$name.pid" bash -lc \
+    "cd \"$ROOT\" && exec python3 -m engine_events.vllm --backend-id \"$backend_id\" --generation \"$generation\" --endpoint tcp://127.0.0.1:$event_port --replay-endpoint tcp://127.0.0.1:$replay_port --gateway-url http://127.0.0.1:$ENFORCED_PORT --admin-token \"$ADMIN_TOKEN\" --checkpoint \"$RUN_DIR/$name.checkpoint.json\" >\"$LOG_DIR/$name.log\" 2>&1"
+}
+
 start_stack() {
   if [[ -z "${MODEL:-}" ]]; then
     echo "set MODEL to a local Hugging Face model directory" >&2
@@ -119,6 +141,8 @@ start_stack() {
   bash "${ROOT}/scripts/launch_stage2_vllm_pair.sh"
   wait_http "http://127.0.0.1:${PORT_A:-18080}/health"
   wait_http "http://127.0.0.1:${PORT_B:-18081}/health"
+  start_hash_resolver
+  wait_http "http://127.0.0.1:$HASH_RESOLVER_PORT/docs" 60
   start_exporter exporter-a "${PORT_A:-18080}" "$EXPORTER_A_PORT" gpu-0
   start_exporter exporter-b "${PORT_B:-18081}" "$EXPORTER_B_PORT" gpu-1
   wait_http "http://127.0.0.1:$EXPORTER_A_PORT/readyz"
@@ -130,11 +154,14 @@ start_stack() {
   start_gateway gateway-static static "$STATIC_PORT"
   start_gateway gateway-load load-aware "$LOAD_PORT"
   start_gateway gateway-shadow shadow "$SHADOW_PORT"
-  start_gateway gateway-enforced enforced "$ENFORCED_PORT"
+  start_with_pid_file "$PID_DIR/gateway-enforced.pid" bash -lc \
+    "cd \"$ROOT\" && exec env KAVORA_TENANT_CONFIG=\"$CONFIG_DIR/gateway.yaml\" KAVORA_POLICY_SOCKET=\"$POLICY_SOCKET\" KAVORA_GATEWAY_LISTEN=127.0.0.1:$ENFORCED_PORT KAVORA_ROUTING_MODE=enforced KAVORA_CACHE_FIDELITY=exact KAVORA_VLLM_HASH_RESOLVER_URL=http://127.0.0.1:$HASH_RESOLVER_PORT KAVORA_BACKEND_STATE_URLS=\"http://127.0.0.1:$EXPORTER_A_PORT/backend-state http://127.0.0.1:$EXPORTER_B_PORT/backend-state\" KAVORA_ADMIN_TOKEN=\"$ADMIN_TOKEN\" \"$ROOT/build/kavora-gateway\" >\"$LOG_DIR/gateway-enforced.log\" 2>&1"
   wait_http "http://127.0.0.1:$STATIC_PORT/readyz" 60
   wait_http "http://127.0.0.1:$LOAD_PORT/readyz" 60
   wait_http "http://127.0.0.1:$SHADOW_PORT/readyz" 60
   wait_http "http://127.0.0.1:$ENFORCED_PORT/readyz" 60
+  start_kv_subscriber kv-events-a gpu-0 "${EVENT_PORT_A:-15557}" "${REPLAY_PORT_A:-15558}"
+  start_kv_subscriber kv-events-b gpu-1 "${EVENT_PORT_B:-15567}" "${REPLAY_PORT_B:-15568}"
   echo "Stage 2 local stack ready; config: $CONFIG_DIR/evaluation.yaml"
 }
 

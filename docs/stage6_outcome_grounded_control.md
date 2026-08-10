@@ -102,7 +102,7 @@ make vllm-kv-events \
 
 The sidecar posts normalized events to `/v1/admin/cache-events`. Configure vLLM with KV event publishing and a replay buffer.
 
-**Hash-alignment boundary:** native events use `vllm:block:<external_block_hash>`. Exact request placement requires the request cache key to be generated in that same namespace. The transport and cache lifecycle are implemented; Kavora does not claim tokenizer/hash alignment for ordinary OpenAI requests yet.
+Native events use `vllm:block:<external_block_hash>`. Stage 7 adds a request hash resolver that calls vLLM `/tokenize`, computes the same ordered block-hash chain with vLLM's implementation, and lets the exact provider measure the longest resident prefix. See the Stage 7 document for required seed, block-size, and hash-algorithm alignment.
 
 ## Policy laboratory
 
@@ -117,4 +117,4 @@ build/kavora replay benchmark/workload_trace.example.jsonl \
   --evidence-quality strict
 ```
 
-`kv-v2` rejects cache affinity when the estimated queue penalty exceeds the simulated prefill benefit. These are simulator comparisons, not counterfactual production measurements. Randomized online policy assignment remains future work and must record assignment probability plus realized outcomes.
+`kv-v2` rejects cache affinity when the estimated queue penalty exceeds the simulated prefill benefit. Stage 7 adds online assignment and outcome-linked evaluation; replay results remain simulations and are not relabeled as online causal evidence.

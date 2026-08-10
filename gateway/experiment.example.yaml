@@ -1,0 +1,22 @@
+experiment:
+  id: kv-v2-vs-static-001
+  control:
+    policy: static
+  treatment:
+    policy: kv-v2
+  design:
+    type: switchback
+    window: 5m
+    warmup: 30s
+    cooldown: 30s
+    seed: kavora-stage7-001
+    treatment_probability: 0.5
+    start_at: 2026-08-10T00:00:00Z
+  guardrails:
+    max_error_rate: 0.01
+    max_p95_ttft_ms: 500
+    max_prediction_mae_ms: 30
+    max_fallback_rate: 0.02
+  stop:
+    min_requests: 5000
+    max_duration: 2h

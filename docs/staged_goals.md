@@ -135,3 +135,4 @@
 | M8 | Evidence-aware routing + decision ledger | 将缓存证据、硬约束、SLO 和生命周期统一为可解释控制平面 |
 | M9 | AutoCalibrator + anonymous replay | 从可信实验学习安全 operating envelope，并在人工审批前验证候选策略 |
 | M10 | Outcome-grounded control | 用真实执行结果审计 prediction correctness、evidence correctness 与 rollout correctness |
+| M11 | Causal policy evaluation | 用 switchback / isolated pools、实验账本与 effect CI 判断 policy 是否真正产生收益 |

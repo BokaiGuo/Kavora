@@ -30,10 +30,11 @@ const (
 )
 
 type CacheMatchRequest struct {
-	RequestID    string
-	TenantID     string
-	CacheKey     string
-	PromptTokens int
+	RequestID         string
+	TenantID          string
+	CacheKey          string
+	ExternalCacheKeys []string
+	PromptTokens      int
 }
 
 type CacheBackend struct {
@@ -274,8 +275,11 @@ func (p *KVEventProvider) clearBackendLocked(backendID string) {
 }
 
 func (p *KVEventProvider) Match(_ context.Context, request CacheMatchRequest, backend CacheBackend) CacheEvidence {
-	if p == nil || request.CacheKey == "" {
+	if p == nil || (request.CacheKey == "" && len(request.ExternalCacheKeys) == 0) {
 		return missingCacheEvidence(CacheSourceKVEvents)
+	}
+	if len(request.ExternalCacheKeys) > 0 {
+		return p.matchExternalPrefix(request, backend)
 	}
 	key := backend.ID + "\x00" + request.CacheKey
 	p.mu.Lock()
@@ -325,6 +329,42 @@ func (p *KVEventProvider) Match(_ context.Context, request CacheMatchRequest, ba
 		Confidence:      confidence,
 		EvidenceQuality: "strict",
 	}
+}
+
+func (p *KVEventProvider) matchExternalPrefix(request CacheMatchRequest, backend CacheBackend) CacheEvidence {
+	now := p.now()
+	matched := 0
+	var latest time.Time
+	p.mu.Lock()
+	for _, cacheKey := range request.ExternalCacheKeys {
+		element, ok := p.entries[backend.ID+"\x00"+cacheKey]
+		if !ok {
+			break
+		}
+		event := element.Value.(kvEventEntry).event
+		if now.Sub(event.ObservedAt) > p.ttl || event.Quality != QualityFresh {
+			break
+		}
+		p.order.MoveToFront(element)
+		matched += maxInt(event.MatchedTokens, 0)
+		latest = event.ObservedAt
+	}
+	p.mu.Unlock()
+	if matched == 0 {
+		return missingCacheEvidence(CacheSourceKVEvents)
+	}
+	if request.PromptTokens > 0 && matched > request.PromptTokens {
+		matched = request.PromptTokens
+	}
+	ratio := 0.0
+	if request.PromptTokens > 0 {
+		ratio = clamp01(float64(matched) / float64(request.PromptTokens))
+	}
+	age := now.Sub(latest)
+	if age < 0 {
+		age = 0
+	}
+	return CacheEvidence{MatchedTokens: matched, MatchRatio: ratio, Source: CacheSourceKVEvents, ObservedAt: latest.UTC(), Quality: QualityFresh, Confidence: confidenceForAge(age, p.lambda), EvidenceQuality: "strict"}
 }
 
 func missingCacheEvidence(source CacheSource) CacheEvidence {

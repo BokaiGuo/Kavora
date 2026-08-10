@@ -18,6 +18,9 @@
 - outcome-grounded TTFT predictor 拟合、prediction calibration 与 drift gate
 - vLLM 原生 KV-event ZMQ subscriber、gap replay、dedupe 与 generation reset
 - 多策略 replay policy laboratory
+- vLLM request-to-external-block-hash resolver 与 exact longest-prefix placement
+- switchback / isolated-pool ExperimentController、实验账本和 policy evaluation report
+- held-out TTFT predictor validation 与 experiment-aware lifecycle gate
 
 ---
 
@@ -29,9 +32,9 @@
 | P1 | 报告自动化生成 | 一次命令产出 markdown + 图 + 结论段落 |
 | P2 | CI 补充图表回归 | 检查脚本产物文件存在、字段完整、无空图 |
 | P1 | 真实 GPU Stage 2 artifact | 补齐硬件、模型和原始请求级证据，作为 v0.1.0 发布门禁 |
-| P1 | vLLM request hash alignment | 将请求 cache key 与 vLLM external block hash 对齐，完成 native event 到 exact placement 的最后一跳 |
 | P2 | SGLang 原生事件 transport | 在 SGLang 提供稳定事件协议后接入相同 sequence/generation contract |
-| P2 | held-out predictor validation | 用独立真实 GPU 时间窗验证 predictor 泛化误差 |
+| P1 | Stage 7 online experiment artifact | 在真实请求上冻结 switchback 或 isolated-pool assignment、outcome journal 与 causal report |
+| P2 | held-out predictor evidence | 使用独立真实 GPU 时间窗运行已实现的 validator，并冻结泛化误差 artifact |
 
 ---
 

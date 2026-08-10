@@ -81,6 +81,9 @@ def test_stage2_local_stack_wires_distinct_strategy_modes() -> None:
     assert "gateway-static static" in stack
     assert "gateway-load load-aware" in stack
     assert "gateway-shadow shadow" in stack
-    assert "gateway-enforced enforced" in stack
+    assert 'PID_DIR/gateway-enforced.pid' in stack
+    assert "KAVORA_ROUTING_MODE=enforced" in stack
+    assert "KAVORA_CACHE_FIDELITY=exact" in stack
+    assert "KAVORA_VLLM_HASH_RESOLVER_URL" in stack
     assert "KAVORA_BACKEND_STATE_URLS" in stack
     assert "make benchmark-stage2" in stack

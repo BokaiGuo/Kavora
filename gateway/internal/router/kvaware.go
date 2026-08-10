@@ -18,6 +18,7 @@ type Candidate struct {
 	CacheConfidence         float64     `json:"cache_confidence"`
 	EvidenceQuality         string      `json:"evidence_quality"`
 	QueueDepth              float64     `json:"queue_depth"`
+	QueuePenaltyMS          float64     `json:"queue_penalty_ms"`
 	KVPressure              float64     `json:"kv_pressure"`
 	RecentPrefillRate       float64     `json:"recent_prefill_tokens_per_second"`
 	PredictorVersion        string      `json:"predictor_version"`
@@ -29,25 +30,37 @@ type Candidate struct {
 }
 
 type Decision struct {
-	RequestID        string            `json:"request_id"`
-	TenantID         string            `json:"tenant_id"`
-	CacheKey         string            `json:"cache_key,omitempty"`
-	PolicyVersion    string            `json:"policy_version"`
-	PredictorVersion string            `json:"predictor_version"`
-	Mode             string            `json:"mode"`
-	Stage            string            `json:"stage,omitempty"`
-	Enforced         bool              `json:"enforced"`
-	CanaryFraction   float64           `json:"canary_fraction"`
-	Requirements     map[string]string `json:"requirements,omitempty"`
-	Selected         string            `json:"selected"`
-	ActualSelected   string            `json:"actual_selected,omitempty"`
-	Fallback         bool              `json:"fallback"`
-	Reason           string            `json:"reason"`
-	Reasons          []string          `json:"reasons,omitempty"`
-	Candidates       []Candidate       `json:"candidates"`
-	OccurredAt       time.Time         `json:"occurred_at"`
-	Outcome          *DecisionOutcome  `json:"outcome,omitempty"`
-	PredictionError  *PredictionError  `json:"prediction_error,omitempty"`
+	RequestID             string            `json:"request_id"`
+	TenantID              string            `json:"tenant_id"`
+	CacheKey              string            `json:"cache_key,omitempty"`
+	HashAlignment         string            `json:"hash_alignment,omitempty"`
+	ExternalCacheKeyCount int               `json:"external_cache_key_count,omitempty"`
+	ExperimentID          string            `json:"experiment_id,omitempty"`
+	AssignedPolicy        string            `json:"assigned_policy,omitempty"`
+	AssignmentUnit        string            `json:"assignment_unit,omitempty"`
+	AssignmentProbability float64           `json:"assignment_probability,omitempty"`
+	AssignmentSeed        string            `json:"assignment_seed,omitempty"`
+	ExperimentWindow      string            `json:"experiment_window,omitempty"`
+	Warmup                bool              `json:"warmup,omitempty"`
+	CarryoverGuard        bool              `json:"carryover_guard,omitempty"`
+	ExperimentActive      bool              `json:"experiment_active,omitempty"`
+	ExperimentStopReason  string            `json:"experiment_stop_reason,omitempty"`
+	PolicyVersion         string            `json:"policy_version"`
+	PredictorVersion      string            `json:"predictor_version"`
+	Mode                  string            `json:"mode"`
+	Stage                 string            `json:"stage,omitempty"`
+	Enforced              bool              `json:"enforced"`
+	CanaryFraction        float64           `json:"canary_fraction"`
+	Requirements          map[string]string `json:"requirements,omitempty"`
+	Selected              string            `json:"selected"`
+	ActualSelected        string            `json:"actual_selected,omitempty"`
+	Fallback              bool              `json:"fallback"`
+	Reason                string            `json:"reason"`
+	Reasons               []string          `json:"reasons,omitempty"`
+	Candidates            []Candidate       `json:"candidates"`
+	OccurredAt            time.Time         `json:"occurred_at"`
+	Outcome               *DecisionOutcome  `json:"outcome,omitempty"`
+	PredictionError       *PredictionError  `json:"prediction_error,omitempty"`
 }
 
 type DecisionOutcome struct {

@@ -92,10 +92,13 @@ flowchart LR
 - Reproducible benchmarks, replay artifacts, promotion gates, and Markdown/JSON reports.
 - Semantic evidence alignment, automatic SLO threshold/concurrency calibration, and anonymous pre-canary workload replay.
 - Outcome-grounded routing with realized request results, prediction error, durable journals, fitted explainable TTFT predictors, drift gates, native vLLM KV-event recovery, and multi-policy replay.
+- Experiment-driven control with vLLM request/block-hash alignment, switchback and isolated-pool assignment, outcome-linked experiment metadata, window-cluster confidence intervals, workload-stratified policy evaluation, and causal promotion gates.
 
 See [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md) for the cache-evidence contract, decision API, lifecycle configuration, and fidelity/lag ablation.
 See [`docs/stage5_self_tuning.md`](docs/stage5_self_tuning.md) for semantic alignment, automatic calibration, anonymous replay, human approval, and rollback.
 See [`docs/stage6_outcome_grounded_control.md`](docs/stage6_outcome_grounded_control.md) for decision/outcome journals, predictor fitting, native KV events, prediction calibration, and policy laboratory semantics.
+
+See [`docs/stage7_causal_policy_evaluation.md`](docs/stage7_causal_policy_evaluation.md) for exact vLLM hash alignment, online experiment assignment, policy-effect reports, held-out predictor validation, and lifecycle promotion gates.
 
 ## Quick Start
 

@@ -119,3 +119,18 @@ func TestKVEventProviderScopesNativeEventIDsByBackend(t *testing.T) {
 		}
 	}
 }
+
+func TestKVEventProviderMatchesLongestAlignedRequestPrefix(t *testing.T) {
+	provider := NewKVEventProvider(16, time.Minute, .1, time.Now)
+	for index, key := range []string{"vllm:block:a", "vllm:block:b"} {
+		provider.Observe(KVEvent{Operation: "store", BackendID: "gpu-0", CacheKey: key, MatchedTokens: 16, TotalTokens: 16, Sequence: uint64(index), HasSequence: true, Generation: "gen", EngineEventID: key, ObservedAt: time.Now()})
+	}
+	evidence := provider.Match(context.Background(), CacheMatchRequest{
+		CacheKey:          "semantic-key",
+		ExternalCacheKeys: []string{"vllm:block:a", "vllm:block:b", "vllm:block:c"},
+		PromptTokens:      48,
+	}, CacheBackend{ID: "gpu-0"})
+	if evidence.MatchedTokens != 32 || math.Abs(evidence.MatchRatio-2.0/3.0) > 1e-9 || evidence.EvidenceQuality != "strict" {
+		t.Fatalf("evidence=%+v", evidence)
+	}
+}
