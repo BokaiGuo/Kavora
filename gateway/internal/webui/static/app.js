@@ -14,10 +14,21 @@ async function lifecycle() {
     const response = await fetch('/v1/admin/lifecycle', { headers: adminHeaders() });
     if (!response.ok) throw Error();
     const state = await response.json();
-    $('lifecycle-state').textContent = `${state.stage.toUpperCase()} · ${Math.round((state.canary_fraction || 0) * 100)}%`;
+    const approval = state.approval_required ? (state.approved ? ` · APPROVED ${state.approved_by}` : ' · APPROVAL REQUIRED') : '';
+    $('lifecycle-state').textContent = `${state.stage.toUpperCase()} · ${Math.round((state.canary_fraction || 0) * 100)}%${approval}`;
   } catch {
     $('lifecycle-state').textContent = 'LIFECYCLE —';
   }
+}
+
+async function approveCanary() {
+  const response = await fetch('/v1/admin/lifecycle/approve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    body: JSON.stringify({ approved_by: $('operator').value.trim() }),
+  });
+  if (!response.ok) throw Error(await response.text());
+  await lifecycle();
 }
 
 function renderDecision(decision) {
@@ -132,6 +143,7 @@ send.onclick = async () => {
 };
 
 $('refresh-decision').onclick = () => inspectDecision();
+$('approve-canary').onclick = () => approveCanary().catch(error => { $('decision-inspector').textContent = 'Approval failed: ' + error.message; });
 $('admin-token').onchange = () => { inspectDecision(); lifecycle(); };
 
 health();

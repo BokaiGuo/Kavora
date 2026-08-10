@@ -76,6 +76,61 @@ func (SignalQuality) EnumDescriptor() ([]byte, []int) {
 	return file_backend_v1_backend_state_proto_rawDescGZIP(), []int{0}
 }
 
+type EvidenceQuality int32
+
+const (
+	EvidenceQuality_EVIDENCE_QUALITY_UNSPECIFIED EvidenceQuality = 0
+	EvidenceQuality_EVIDENCE_QUALITY_STRICT      EvidenceQuality = 1
+	EvidenceQuality_EVIDENCE_QUALITY_ESTIMATED   EvidenceQuality = 2
+	EvidenceQuality_EVIDENCE_QUALITY_FALLBACK    EvidenceQuality = 3
+	EvidenceQuality_EVIDENCE_QUALITY_MISSING     EvidenceQuality = 4
+)
+
+// Enum value maps for EvidenceQuality.
+var (
+	EvidenceQuality_name = map[int32]string{
+		0: "EVIDENCE_QUALITY_UNSPECIFIED",
+		1: "EVIDENCE_QUALITY_STRICT",
+		2: "EVIDENCE_QUALITY_ESTIMATED",
+		3: "EVIDENCE_QUALITY_FALLBACK",
+		4: "EVIDENCE_QUALITY_MISSING",
+	}
+	EvidenceQuality_value = map[string]int32{
+		"EVIDENCE_QUALITY_UNSPECIFIED": 0,
+		"EVIDENCE_QUALITY_STRICT":      1,
+		"EVIDENCE_QUALITY_ESTIMATED":   2,
+		"EVIDENCE_QUALITY_FALLBACK":    3,
+		"EVIDENCE_QUALITY_MISSING":     4,
+	}
+)
+
+func (x EvidenceQuality) Enum() *EvidenceQuality {
+	p := new(EvidenceQuality)
+	*p = x
+	return p
+}
+
+func (x EvidenceQuality) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EvidenceQuality) Descriptor() protoreflect.EnumDescriptor {
+	return file_backend_v1_backend_state_proto_enumTypes[1].Descriptor()
+}
+
+func (EvidenceQuality) Type() protoreflect.EnumType {
+	return &file_backend_v1_backend_state_proto_enumTypes[1]
+}
+
+func (x EvidenceQuality) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EvidenceQuality.Descriptor instead.
+func (EvidenceQuality) EnumDescriptor() ([]byte, []int) {
+	return file_backend_v1_backend_state_proto_rawDescGZIP(), []int{1}
+}
+
 type Signal struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	Value                float64                `protobuf:"fixed64,1,opt,name=value,proto3" json:"value,omitempty"`
@@ -84,6 +139,7 @@ type Signal struct {
 	Source               string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
 	ObservedAtUnixMillis int64                  `protobuf:"varint,5,opt,name=observed_at_unix_millis,json=observedAtUnixMillis,proto3" json:"observed_at_unix_millis,omitempty"`
 	Semantics            string                 `protobuf:"bytes,6,opt,name=semantics,proto3" json:"semantics,omitempty"`
+	EvidenceQuality      EvidenceQuality        `protobuf:"varint,7,opt,name=evidence_quality,json=evidenceQuality,proto3,enum=kavora.backend.v1.EvidenceQuality" json:"evidence_quality,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -158,6 +214,13 @@ func (x *Signal) GetSemantics() string {
 		return x.Semantics
 	}
 	return ""
+}
+
+func (x *Signal) GetEvidenceQuality() EvidenceQuality {
+	if x != nil {
+		return x.EvidenceQuality
+	}
+	return EvidenceQuality_EVIDENCE_QUALITY_UNSPECIFIED
 }
 
 type NamedSignal struct {
@@ -384,14 +447,15 @@ var File_backend_v1_backend_state_proto protoreflect.FileDescriptor
 
 const file_backend_v1_backend_state_proto_rawDesc = "" +
 	"\n" +
-	"\x1ebackend/v1/backend_state.proto\x12\x11kavora.backend.v1\"\xe4\x01\n" +
+	"\x1ebackend/v1/backend_state.proto\x12\x11kavora.backend.v1\"\xb3\x02\n" +
 	"\x06Signal\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\x01R\x05value\x12\x1b\n" +
 	"\thas_value\x18\x02 \x01(\bR\bhasValue\x12:\n" +
 	"\aquality\x18\x03 \x01(\x0e2 .kavora.backend.v1.SignalQualityR\aquality\x12\x16\n" +
 	"\x06source\x18\x04 \x01(\tR\x06source\x125\n" +
 	"\x17observed_at_unix_millis\x18\x05 \x01(\x03R\x14observedAtUnixMillis\x12\x1c\n" +
-	"\tsemantics\x18\x06 \x01(\tR\tsemantics\"T\n" +
+	"\tsemantics\x18\x06 \x01(\tR\tsemantics\x12M\n" +
+	"\x10evidence_quality\x18\a \x01(\x0e2\".kavora.backend.v1.EvidenceQualityR\x0fevidenceQuality\"T\n" +
 	"\vNamedSignal\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x121\n" +
 	"\x06signal\x18\x02 \x01(\v2\x19.kavora.backend.v1.SignalR\x06signal\"\xd7\x02\n" +
@@ -416,7 +480,13 @@ const file_backend_v1_backend_state_proto_rawDesc = "" +
 	"\x14SIGNAL_QUALITY_FRESH\x10\x01\x12\x18\n" +
 	"\x14SIGNAL_QUALITY_STALE\x10\x02\x12\x1a\n" +
 	"\x16SIGNAL_QUALITY_MISSING\x10\x03\x12\x1a\n" +
-	"\x16SIGNAL_QUALITY_INVALID\x10\x04BFZDgithub.com/BokaiGuo-Lincoln/kavora/proto/gen/go/backend/v1;backendv1b\x06proto3"
+	"\x16SIGNAL_QUALITY_INVALID\x10\x04*\xad\x01\n" +
+	"\x0fEvidenceQuality\x12 \n" +
+	"\x1cEVIDENCE_QUALITY_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17EVIDENCE_QUALITY_STRICT\x10\x01\x12\x1e\n" +
+	"\x1aEVIDENCE_QUALITY_ESTIMATED\x10\x02\x12\x1d\n" +
+	"\x19EVIDENCE_QUALITY_FALLBACK\x10\x03\x12\x1c\n" +
+	"\x18EVIDENCE_QUALITY_MISSING\x10\x04BFZDgithub.com/BokaiGuo-Lincoln/kavora/proto/gen/go/backend/v1;backendv1b\x06proto3"
 
 var (
 	file_backend_v1_backend_state_proto_rawDescOnce sync.Once
@@ -430,25 +500,27 @@ func file_backend_v1_backend_state_proto_rawDescGZIP() []byte {
 	return file_backend_v1_backend_state_proto_rawDescData
 }
 
-var file_backend_v1_backend_state_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_backend_v1_backend_state_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_backend_v1_backend_state_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_backend_v1_backend_state_proto_goTypes = []any{
 	(SignalQuality)(0),           // 0: kavora.backend.v1.SignalQuality
-	(*Signal)(nil),               // 1: kavora.backend.v1.Signal
-	(*NamedSignal)(nil),          // 2: kavora.backend.v1.NamedSignal
-	(*BackendState)(nil),         // 3: kavora.backend.v1.BackendState
-	(*BackendStateSnapshot)(nil), // 4: kavora.backend.v1.BackendStateSnapshot
+	(EvidenceQuality)(0),         // 1: kavora.backend.v1.EvidenceQuality
+	(*Signal)(nil),               // 2: kavora.backend.v1.Signal
+	(*NamedSignal)(nil),          // 3: kavora.backend.v1.NamedSignal
+	(*BackendState)(nil),         // 4: kavora.backend.v1.BackendState
+	(*BackendStateSnapshot)(nil), // 5: kavora.backend.v1.BackendStateSnapshot
 }
 var file_backend_v1_backend_state_proto_depIdxs = []int32{
 	0, // 0: kavora.backend.v1.Signal.quality:type_name -> kavora.backend.v1.SignalQuality
-	1, // 1: kavora.backend.v1.NamedSignal.signal:type_name -> kavora.backend.v1.Signal
-	2, // 2: kavora.backend.v1.BackendState.signals:type_name -> kavora.backend.v1.NamedSignal
-	3, // 3: kavora.backend.v1.BackendStateSnapshot.backends:type_name -> kavora.backend.v1.BackendState
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	1, // 1: kavora.backend.v1.Signal.evidence_quality:type_name -> kavora.backend.v1.EvidenceQuality
+	2, // 2: kavora.backend.v1.NamedSignal.signal:type_name -> kavora.backend.v1.Signal
+	3, // 3: kavora.backend.v1.BackendState.signals:type_name -> kavora.backend.v1.NamedSignal
+	4, // 4: kavora.backend.v1.BackendStateSnapshot.backends:type_name -> kavora.backend.v1.BackendState
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_backend_v1_backend_state_proto_init() }
@@ -461,7 +533,7 @@ func file_backend_v1_backend_state_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_backend_v1_backend_state_proto_rawDesc), len(file_backend_v1_backend_state_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,

@@ -56,6 +56,7 @@ def test_recommend_runs_uses_window_hit_ratio_and_counts_missing() -> None:
     assert dual["num_runs_prefix_metric_strict"] == 1
     assert dual["num_runs_prefix_metric_token_fallback"] == 1
     assert dual["prefix_metric_check"] == "mixed"
+    assert dual["evidence_quality"] == "mixed"
 
 
 def test_recommend_runs_rejects_stale_hit_ratio_for_dual_boundary() -> None:
@@ -111,3 +112,4 @@ def test_recommend_runs_reports_snapshot_fallback_for_legacy_entries() -> None:
     assert dual["hit_ratio_comparable"] is True
     assert dual["num_runs_prefix_metric_token_fallback"] == 1
     assert dual["prefix_metric_check"] == "token_fallback"
+    assert dual["evidence_quality"] == "fallback"

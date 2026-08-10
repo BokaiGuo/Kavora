@@ -18,6 +18,7 @@ type Signal struct {
 	Source               string  `json:"source"`
 	ObservedAtUnixMillis int64   `json:"observed_at_unix_millis"`
 	Semantics            string  `json:"semantics"`
+	EvidenceQuality      string  `json:"evidence_quality,omitempty"`
 }
 
 type Snapshot struct {
@@ -60,6 +61,9 @@ func Validate(snapshot Snapshot) error {
 		if signal.Quality != "fresh" && signal.Quality != "stale" && signal.Quality != "missing" && signal.Quality != "invalid" {
 			return fmt.Errorf("signal %q has invalid quality %q", name, signal.Quality)
 		}
+		if signal.EvidenceQuality != "" && signal.EvidenceQuality != "strict" && signal.EvidenceQuality != "estimated" && signal.EvidenceQuality != "fallback" && signal.EvidenceQuality != "missing" {
+			return fmt.Errorf("signal %q has invalid evidence quality %q", name, signal.EvidenceQuality)
+		}
 		if signal.ObservedAtUnixMillis <= 0 || signal.Source == "" {
 			return fmt.Errorf("signal %q is missing provenance", name)
 		}
@@ -71,6 +75,13 @@ func Validate(snapshot Snapshot) error {
 		}
 	}
 	return nil
+}
+
+func EvidenceQualityOf(signal Signal) string {
+	if signal.EvidenceQuality == "" {
+		return "missing"
+	}
+	return signal.EvidenceQuality
 }
 
 func Value(snapshot Snapshot, name string) (float64, bool) {

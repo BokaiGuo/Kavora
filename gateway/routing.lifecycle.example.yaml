@@ -1,4 +1,5 @@
 enabled: true
+require_human_approval: true
 policy_version: evidence-routing-v1
 min_requests: 500
 canary_steps: [0.05, 0.25, 0.50, 1.0]

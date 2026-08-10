@@ -9,6 +9,8 @@ def build_advice(snapshot: DerivedSnapshot, *, stale: bool = False) -> dict[str,
     recommendations: list[dict[str, Any]] = []
     if stale:
         recommendations.append({"severity": "critical", "code": "metrics_stale", "action": "check_backend_metrics_endpoint", "reason": "backend metrics are stale; keep static routing and do not promote KV-aware decisions"})
+    if snapshot.prefix_evidence_quality in {"estimated", "fallback", "missing"}:
+        recommendations.append({"severity": "warning", "code": "cache_evidence_not_strict", "action": "keep_recommendations_dry_run_only", "reason": f"cache evidence quality is {snapshot.prefix_evidence_quality}; do not auto-promote a calibrated policy"})
     if snapshot.cache_hit_ratio is None:
         recommendations.append({"severity": "info", "code": "cache_hit_ratio_missing", "action": "enable_comparable_prefix_counters", "reason": "cache hit ratio is unavailable and must not be inferred from zero"})
     elif snapshot.cache_hit_ratio < 0.2:

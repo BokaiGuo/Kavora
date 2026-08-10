@@ -1,4 +1,4 @@
-.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity stage2-local demo-stage1 demo-kavora stage1-gate research-report
+.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate stage2-local demo-stage1 demo-kavora stage1-gate research-report
 
 GO ?= go
 CARGO ?= cargo
@@ -70,6 +70,10 @@ benchmark-stage2-config:
 
 benchmark-fidelity:
 	$(PYTHON) -m benchmark.cache_fidelity
+
+auto-calibrate:
+	@test -n "$(INPUT)" || (echo "usage: make auto-calibrate INPUT=results/.../summary.json"; exit 1)
+	$(PYTHON) -m planner.auto_calibrator --input "$(INPUT)" --out "$${OUT:-results/calibration/recommendation.json}" --report "$${REPORT:-results/calibration/recommendation.md}"
 
 stage2-local:
 	bash scripts/stage2_local_stack.sh run

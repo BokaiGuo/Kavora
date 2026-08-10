@@ -1,0 +1,4 @@
+{"prompt_tokens":1024,"output_tokens":64,"shared_prefix_hash":"sha256:demo-a","shared_prefix_tokens":768,"tenant_class":"research","arrival_delta_ms":0,"streaming":true,"model":"demo-model"}
+{"prompt_tokens":896,"output_tokens":48,"shared_prefix_hash":"sha256:demo-b","shared_prefix_tokens":640,"tenant_class":"internal","arrival_delta_ms":35,"streaming":false,"model":"demo-model"}
+{"prompt_tokens":1088,"output_tokens":64,"shared_prefix_hash":"sha256:demo-a","shared_prefix_tokens":768,"tenant_class":"research","arrival_delta_ms":20,"streaming":true,"model":"demo-model"}
+{"prompt_tokens":960,"output_tokens":48,"shared_prefix_hash":"sha256:demo-b","shared_prefix_tokens":640,"tenant_class":"internal","arrival_delta_ms":40,"streaming":false,"model":"demo-model"}

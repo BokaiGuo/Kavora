@@ -95,6 +95,23 @@ func NewWithControlPlane(gateway http.Handler, metrics *telemetry.Metrics, ready
 				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		}))
+		mux.HandleFunc("/v1/admin/lifecycle/approve", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodPost {
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			lifecycle := controller.Lifecycle()
+			if lifecycle == nil {
+				http.Error(writer, "lifecycle unavailable", http.StatusNotImplemented)
+				return
+			}
+			var approval router.LifecycleApproval
+			if err := decodeJSON(request, &approval); err != nil || strings.TrimSpace(approval.ApprovedBy) == "" {
+				http.Error(writer, "approved_by is required", http.StatusBadRequest)
+				return
+			}
+			writeJSON(writer, http.StatusOK, lifecycle.Approve(approval))
+		}))
 		mux.HandleFunc("/v1/admin/cache-events", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
 			if request.Method != http.MethodPost {
 				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)

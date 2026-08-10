@@ -28,12 +28,12 @@ def _pick_metric_with_name(metrics: dict[str, float], *keys: str, default: float
     return default, ""
 
 
-def _prefix_metric_metadata(hits_metric_name: str, queries_metric_name: str) -> tuple[str, str, str]:
+def _prefix_metric_metadata(hits_metric_name: str, queries_metric_name: str) -> tuple[str, str, str, str]:
     if hits_metric_name and queries_metric_name:
-        return "prefix_query_counters", "strict", "queries"
+        return "prefix_query_counters", "strict", "queries", "strict"
     if hits_metric_name or queries_metric_name:
-        return "partial", "missing", "mixed"
-    return "missing", "missing", "missing"
+        return "partial", "missing", "mixed", "missing"
+    return "missing", "missing", "missing", "missing"
 
 
 class VllmAdapter:
@@ -74,9 +74,22 @@ class VllmAdapter:
         prefix_queries, prefix_queries_metric_name = _pick_metric_with_name(
             m, "vllm:prefix_cache_queries_total", "vllm:prefix_cache_queries"
         )
-        prefix_metric_semantics, prefix_metric_comparability, prefix_metric_basis = _prefix_metric_metadata(
+        prefix_metric_semantics, prefix_metric_comparability, prefix_metric_basis, prefix_evidence_quality = _prefix_metric_metadata(
             prefix_hits_metric_name, prefix_queries_metric_name
         )
+
+        block_metric_names = {
+            "vllm_obs:kv_total_blocks",
+            "vllm_obs:kv_active_blocks",
+            "vllm_obs:kv_reusable_cached_blocks",
+            "vllm_obs:kv_free_uncached_blocks",
+        }
+        if block_metric_names.issubset(m):
+            block_evidence_quality = "strict"
+        elif "vllm:kv_cache_usage_perc" in m:
+            block_evidence_quality = "estimated"
+        else:
+            block_evidence_quality = "missing"
 
         return NativeSnapshot(
             backend="vllm",
@@ -96,6 +109,8 @@ class VllmAdapter:
             prefix_metric_semantics=prefix_metric_semantics,
             prefix_metric_comparability=prefix_metric_comparability,
             prefix_metric_basis=prefix_metric_basis,
+            prefix_evidence_quality=prefix_evidence_quality,
+            block_evidence_quality=block_evidence_quality,
             queue_depth=_pick_optional("vllm:num_requests_waiting"),
             running_requests=_pick_optional("vllm:num_requests_running"),
             extra=m,

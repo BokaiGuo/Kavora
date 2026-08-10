@@ -125,12 +125,14 @@ def test_markdown_embeds_ranking_plot_image() -> None:
         "meta": {"base_url": "http://localhost:8000", "model": "demo", "repeats": 3},
         "points": [],
         "ranking": {"by_scenario": {"low_reuse": {"highest_feasible_point": None, "best_safe_point": None}}},
+        "calibration": {"recommendation": None},
     }
 
     md = _to_markdown(doc, ranking_plot_name="capacity_sweep_ranking.png")
 
     assert "## Ranking Plot" in md
     assert "![capacity_sweep_ranking](capacity_sweep_ranking.png)" in md
+    assert "calibration blocked" in md
 
 
 def test_experiment_template_invokes_capacity_sweep() -> None:

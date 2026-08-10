@@ -24,6 +24,7 @@ def _signal(
     source: str,
     observed_at_unix_millis: int,
     semantics: str,
+    evidence_quality: str,
     stale: bool = False,
 ) -> dict[str, Any]:
     return {
@@ -33,6 +34,7 @@ def _signal(
         "source": source or "derived",
         "observed_at_unix_millis": observed_at_unix_millis,
         "semantics": semantics,
+        "evidence_quality": evidence_quality,
     }
 
 
@@ -47,17 +49,17 @@ def snapshot_from_derived(
     backend_key = backend_id or f"{snap.backend}:{snap.instance}"
     prefix_source = snap.prefix_hits_metric_name or snap.prefix_queries_metric_name or "derived"
     signals = {
-        "total_blocks": _signal(snap.total_blocks, source="derived.total_blocks", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
-        "active_blocks": _signal(snap.active_blocks, source="derived.active_blocks", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
-        "reusable_cached_blocks": _signal(snap.reusable_cached_blocks, source="derived.reusable_cached_blocks", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
-        "free_uncached_blocks": _signal(snap.free_uncached_blocks, source="derived.free_uncached_blocks", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
-        "duplicate_cached_blocks": _signal(snap.duplicate_cached_blocks, source="derived.duplicate_cached_blocks", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
-        "hidden_reuse_ready_perc": _signal(snap.hidden_reuse_ready_perc, source="derived.hidden_reuse_ready_perc", observed_at_unix_millis=observed, semantics="ratio", stale=stale),
-        "effective_residency_perc": _signal(snap.effective_residency_perc, source="derived.effective_residency_perc", observed_at_unix_millis=observed, semantics="ratio", stale=stale),
-        "cold_free_perc": _signal(snap.cold_free_perc, source="derived.cold_free_perc", observed_at_unix_millis=observed, semantics="ratio", stale=stale),
-        "cache_hit_ratio": _signal(snap.cache_hit_ratio, source=prefix_source, observed_at_unix_millis=observed, semantics=snap.prefix_metric_semantics, stale=stale),
-        "queue_depth": _signal(snap.queue_depth, source="backend.queue_depth", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
-        "running_requests": _signal(snap.running_requests, source="backend.running_requests", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
+        "total_blocks": _signal(snap.total_blocks, source="derived.total_blocks", observed_at_unix_millis=observed, semantics="gauge", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "active_blocks": _signal(snap.active_blocks, source="derived.active_blocks", observed_at_unix_millis=observed, semantics="gauge", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "reusable_cached_blocks": _signal(snap.reusable_cached_blocks, source="derived.reusable_cached_blocks", observed_at_unix_millis=observed, semantics="gauge", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "free_uncached_blocks": _signal(snap.free_uncached_blocks, source="derived.free_uncached_blocks", observed_at_unix_millis=observed, semantics="gauge", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "duplicate_cached_blocks": _signal(snap.duplicate_cached_blocks, source="derived.duplicate_cached_blocks", observed_at_unix_millis=observed, semantics="gauge", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "hidden_reuse_ready_perc": _signal(snap.hidden_reuse_ready_perc, source="derived.hidden_reuse_ready_perc", observed_at_unix_millis=observed, semantics="ratio", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "effective_residency_perc": _signal(snap.effective_residency_perc, source="derived.effective_residency_perc", observed_at_unix_millis=observed, semantics="ratio", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "cold_free_perc": _signal(snap.cold_free_perc, source="derived.cold_free_perc", observed_at_unix_millis=observed, semantics="ratio", evidence_quality=snap.block_evidence_quality, stale=stale),
+        "cache_hit_ratio": _signal(snap.cache_hit_ratio, source=prefix_source, observed_at_unix_millis=observed, semantics=snap.prefix_metric_semantics, evidence_quality=snap.prefix_evidence_quality, stale=stale),
+        "queue_depth": _signal(snap.queue_depth, source="backend.queue_depth", observed_at_unix_millis=observed, semantics="gauge", evidence_quality="strict" if snap.queue_depth is not None else "missing", stale=stale),
+        "running_requests": _signal(snap.running_requests, source="backend.running_requests", observed_at_unix_millis=observed, semantics="gauge", evidence_quality="strict" if snap.running_requests is not None else "missing", stale=stale),
     }
     body = {
         "schema_version": SCHEMA_VERSION,

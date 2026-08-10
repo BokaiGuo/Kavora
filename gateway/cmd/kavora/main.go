@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/client"
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/workloadreplay"
 )
 
 const version = "0.1.0"
@@ -61,6 +62,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		err = runAdvice(args, stdout, stderr, jsonOutput)
 	case "config":
 		err = runConfig(args, stdout, stderr, jsonOutput)
+	case "replay":
+		err = runReplay(args, stdout, stderr, jsonOutput)
 	default:
 		err = fmt.Errorf("unknown command %q", command)
 	}
@@ -73,6 +76,99 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput bool) error {
+	if len(args) == 0 {
+		return errors.New("usage: kavora replay trace.jsonl --policy baseline|candidate")
+	}
+	tracePath := args[0]
+	flags := flag.NewFlagSet("replay", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	policy := flags.String("policy", "candidate", "baseline or candidate")
+	backends := flags.Int("backends", 2, "simulated backend count")
+	minHitRatio := flags.Float64("min-hit-ratio", .4, "candidate cache threshold")
+	maxConcurrency := flags.Int("max-concurrency", 16, "candidate concurrency ceiling")
+	evidenceQuality := flags.String("evidence-quality", "missing", "strict, estimated, fallback, or missing")
+	ttftSLOMS := flags.Float64("ttft-slo-ms", 500, "TTFT SLO in milliseconds")
+	prefillRate := flags.Float64("prefill-tokens-per-second", 8000, "simulated prefill rate")
+	decodeRate := flags.Float64("decode-tokens-per-second", 100, "simulated decode rate")
+	outPath := flags.String("out", "", "optional JSON artifact path")
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *policy != "baseline" && *policy != "candidate" {
+		return errors.New("--policy must be baseline or candidate")
+	}
+	file, err := os.Open(tracePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	trace, err := workloadreplay.ReadTrace(file)
+	if err != nil {
+		return err
+	}
+	report, err := workloadreplay.Compare(trace, workloadreplay.Config{
+		Backends:               *backends,
+		MinHitRatio:            *minHitRatio,
+		MaxConcurrency:         *maxConcurrency,
+		EvidenceQuality:        *evidenceQuality,
+		TTFTSLOMS:              *ttftSLOMS,
+		PrefillTokensPerSecond: *prefillRate,
+		DecodeTokensPerSecond:  *decodeRate,
+	})
+	if err != nil {
+		return err
+	}
+	var artifact any = report
+	if *policy == "baseline" {
+		artifact = map[string]any{
+			"schema_version": workloadreplay.SchemaVersion,
+			"policy":         "baseline",
+			"metrics":        report.Baseline,
+			"claim_boundary": report.ClaimBoundary,
+		}
+	}
+	encoded, err := json.MarshalIndent(artifact, "", "  ")
+	if err != nil {
+		return err
+	}
+	if *outPath != "" {
+		if err := os.MkdirAll(filepath.Dir(*outPath), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(*outPath, append(encoded, '\n'), 0o600); err != nil {
+			return err
+		}
+	}
+	if jsonOutput {
+		_, err = fmt.Fprintln(stdout, string(encoded))
+		return err
+	}
+	if *policy == "baseline" {
+		fmt.Fprintf(
+			stdout,
+			"Baseline policy\nP95 TTFT %.2f ms\nThroughput %.2f req/s\nSLO violations %.2f%%\nCache reuse %.2f%%\n",
+			report.Baseline.P95TTFTMS,
+			report.Baseline.ThroughputReqS,
+			report.Baseline.SLOViolationRate*100,
+			report.Baseline.CacheReuseRatio*100,
+		)
+		return nil
+	}
+	fmt.Fprintf(
+		stdout,
+		"Candidate policy\n\nP95 TTFT       %+.1f%%\nThroughput      %+.1f%%\nSLO violations  %+.1f%%\nCache reuse     %+.1f%%\nImbalance       %+.1f%%\n\nRecommendation: %s\nApproval: %s\n",
+		report.Comparison.P95TTFTPercent,
+		report.Comparison.ThroughputPercent,
+		report.Comparison.SLOViolationsPercent,
+		report.Comparison.CacheReusePercent,
+		report.Comparison.ImbalancePercent,
+		report.Recommendation,
+		report.ApprovalStatus,
+	)
+	return nil
 }
 
 func runDoctor(args []string, stdout io.Writer, stderr io.Writer, jsonOutput bool) error {
@@ -285,6 +381,7 @@ Usage:
   kavora backends [--json] [--base-url URL]
   kavora advice [--json] [--base-url URL]
   kavora chat [--json] --message TEXT [--model NAME] [--stream]
+  kavora replay trace.jsonl --policy baseline|candidate [--json]
   kavora config init --api-key KEY [--base-url URL]
 
 Environment:

@@ -56,6 +56,7 @@ def empty_derived_window_metrics(*, metric_source: str = "backend") -> dict[str,
         "metrics_missing": False,
         "metrics_stale": False,
         "metric_source": metric_source,
+        "evidence_quality": "missing",
     }
 
 
@@ -105,6 +106,13 @@ def pick_metric(metrics: Mapping[str, float], candidates: Sequence[str]) -> floa
         if name in metrics:
             return float(metrics[name])
     return None
+
+
+def pick_metric_with_name(metrics: Mapping[str, float], candidates: Sequence[str]) -> tuple[float | None, str]:
+    for name in candidates:
+        if name in metrics:
+            return float(metrics[name]), name
+    return None, ""
 
 
 def metric_from_snapshot(snapshot: Mapping[str, Any] | None, candidates: Sequence[str]) -> float | None:
@@ -188,7 +196,41 @@ def summarize_hit_ratio_source_counts(
     return "missing"
 
 
+def get_entry_evidence_quality(entry: Mapping[str, Any]) -> str:
+    derived = entry.get("derived_window_metrics", {})
+    if isinstance(derived, Mapping):
+        derived_quality = str(derived.get("evidence_quality", "missing"))
+        if derived_quality in {"strict", "estimated", "fallback"}:
+            return derived_quality
+    exporter_metrics = entry.get("exporter_metrics", {})
+    if not isinstance(exporter_metrics, Mapping):
+        return "missing"
+    if _coerce_finite_float(exporter_metrics.get("kvcache_exporter_prefix_metric_comparable")) == 1.0:
+        return "strict"
+    if _coerce_finite_float(exporter_metrics.get("kvcache_exporter_prefix_metric_estimated")) == 1.0:
+        return "estimated"
+    if _coerce_finite_float(exporter_metrics.get("kvcache_exporter_prefix_metric_token_fallback")) == 1.0:
+        return "fallback"
+    return "missing"
+
+
+def summarize_evidence_quality(entries: Sequence[Mapping[str, Any]]) -> str:
+    qualities = {get_entry_evidence_quality(entry) for entry in entries}
+    if not qualities:
+        return "missing"
+    if len(qualities) == 1:
+        return qualities.pop()
+    return "mixed"
+
+
 def get_entry_prefix_metric_check(entry: Mapping[str, Any]) -> str:
+    evidence_quality = get_entry_evidence_quality(entry)
+    if evidence_quality == "strict":
+        return "strict"
+    if evidence_quality == "fallback":
+        return "token_fallback"
+    if evidence_quality == "estimated":
+        return "other"
     exporter_metrics = entry.get("exporter_metrics", {})
     if not isinstance(exporter_metrics, Mapping):
         return "missing"
@@ -255,10 +297,12 @@ def derive_window_metrics(
     prefix_queries_keys: Sequence[str] = DEFAULT_PREFIX_QUERIES_KEYS,
     metric_source: str = "backend",
 ) -> dict[str, Any]:
-    hits_before = metric_from_snapshot(before_snapshot, prefix_hits_keys)
-    hits_after = metric_from_snapshot(after_snapshot, prefix_hits_keys)
-    queries_before = metric_from_snapshot(before_snapshot, prefix_queries_keys)
-    queries_after = metric_from_snapshot(after_snapshot, prefix_queries_keys)
+    before_metrics = before_snapshot.get("metrics", {}) if isinstance(before_snapshot, Mapping) else {}
+    after_metrics = after_snapshot.get("metrics", {}) if isinstance(after_snapshot, Mapping) else {}
+    hits_before, hits_before_name = pick_metric_with_name(before_metrics, prefix_hits_keys) if isinstance(before_metrics, Mapping) else (None, "")
+    hits_after, hits_after_name = pick_metric_with_name(after_metrics, prefix_hits_keys) if isinstance(after_metrics, Mapping) else (None, "")
+    queries_before, queries_before_name = pick_metric_with_name(before_metrics, prefix_queries_keys) if isinstance(before_metrics, Mapping) else (None, "")
+    queries_after, queries_after_name = pick_metric_with_name(after_metrics, prefix_queries_keys) if isinstance(after_metrics, Mapping) else (None, "")
 
     if hits_before is None and hits_after is not None and not snapshot_has_error(before_snapshot):
         hits_before = 0.0
@@ -277,6 +321,12 @@ def derive_window_metrics(
         any(v is None for v in (hits_before, hits_after, queries_before, queries_after))
         or cache_hit_ratio_window is None
     )
+    selected_names = {name for name in (hits_before_name, hits_after_name, queries_before_name, queries_after_name) if name}
+    token_fallback = {"sglang:cached_tokens_total", "sglang_cached_tokens_total", "sglang:prompt_tokens_total", "sglang_prompt_tokens_total"}
+    if cache_hit_ratio_window is not None and selected_names and selected_names.issubset(token_fallback):
+        out["evidence_quality"] = "fallback"
+    elif cache_hit_ratio_window is not None and hits_after_name and queries_after_name:
+        out["evidence_quality"] = "strict"
     return out
 
 
@@ -325,6 +375,7 @@ def summarize_entry_quality(entry: Mapping[str, Any]) -> dict[str, Any]:
         "cache_hit_ratio": hit_ratio,
         "metric_quality": metric_quality,
         "hit_ratio_source": hit_ratio_source,
+        "evidence_quality": get_entry_evidence_quality(entry),
     }
 
 
@@ -373,4 +424,5 @@ def summarize_runs_quality(entries: Sequence[Mapping[str, Any]]) -> dict[str, An
         counts["metric_quality"] == "ok" and counts["hit_ratio_source"] != "mixed"
     )
     counts.update(summarize_prefix_metric_checks(entries))
+    counts["evidence_quality"] = summarize_evidence_quality(entries)
     return counts

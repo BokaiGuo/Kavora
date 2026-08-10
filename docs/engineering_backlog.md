@@ -11,6 +11,9 @@
 - Exporter `/healthz` + `/readyz` 分离与 scrape 自监控指标
 - Custom HTTP 压测 E2E 语义与可复现种子
 - low/high reuse 实验模板与阈值曲线脚本
+- `strict / estimated / fallback / missing` 后端证据语义对齐
+- SLO-aware `AutoCalibrator` 阈值与并发推荐
+- 匿名 workload signature replay 与人工 canary 审批门禁
 
 ---
 
@@ -19,10 +22,10 @@
 | 优先级 | 任务 | 说明 |
 |---|---|---|
 | P1 | `vllm_obs` block 语义补丁接入 | 让 `hidden_reuse_ready_perc` 从“弱信号”变成“可判别信号” |
-| P1 | dual 阈值自动校准 | 给定目标 SLO 时自动建议 `min_hit_ratio` 区间 |
 | P1 | 报告自动化生成 | 一次命令产出 markdown + 图 + 结论段落 |
 | P2 | CI 补充图表回归 | 检查脚本产物文件存在、字段完整、无空图 |
-| P2 | 真实流量回放 | 验证 synthetic 结论对线上流量的迁移性 |
+| P1 | 真实 GPU Stage 2 artifact | 补齐硬件、模型和原始请求级证据，作为 v0.1.0 发布门禁 |
+| P2 | 原生引擎 KV-event transport | 将 exact provider 从管理 API ingestion 扩展到 vLLM/SGLang 原生事件流 |
 
 ---
 

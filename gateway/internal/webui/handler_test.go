@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,6 +27,23 @@ func TestHandlerServesUIAndHealth(t *testing.T) {
 	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/ui/", nil))
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Kavora") {
 		t.Fatalf("UI response = %d %q", page.Code, page.Body.String())
+	}
+}
+
+func TestHandlerRequiresExplicitLifecycleApproval(t *testing.T) {
+	lifecycle, err := router.NewLifecycle(router.LifecycleConfig{Enabled: true, RequireHumanApproval: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller := router.NewController(router.ModeShadow, nil)
+	controller.SetLifecycle(lifecycle)
+	handler := NewWithControlPlane(http.NotFoundHandler(), nil, nil, nil, controller, "secret")
+	request := httptest.NewRequest(http.MethodPost, "/v1/admin/lifecycle/approve", bytes.NewBufferString(`{"approved_by":"operator"}`))
+	request.Header.Set("Authorization", "Bearer secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"approved":true`) {
+		t.Fatalf("response=%d %q", response.Code, response.Body.String())
 	}
 }
 

@@ -4,6 +4,7 @@ from typing import Any
 
 from benchmark.window_metrics import (
     get_entry_prefix_metric_check,
+    get_entry_evidence_quality,
     get_entry_hit_ratio_quality_and_source,
     summarize_hit_ratio_source_counts,
     summarize_metric_quality_counts,
@@ -28,6 +29,7 @@ def recommend_runs(
     prefix_metric_token_fallback_count = 0
     prefix_metric_other_count = 0
     prefix_metric_missing_count = 0
+    evidence_quality_counts = {"strict": 0, "estimated": 0, "fallback": 0, "missing": 0}
 
     for entry in runs:
         s = entry.get("summary", {})
@@ -50,6 +52,8 @@ def recommend_runs(
         elif hit_ratio_source == "snapshot_fallback":
             snapshot_fallback_count += 1
         prefix_metric_check = get_entry_prefix_metric_check(entry)
+        evidence_quality = get_entry_evidence_quality(entry)
+        evidence_quality_counts[evidence_quality if evidence_quality in evidence_quality_counts else "missing"] += 1
         if prefix_metric_check == "strict":
             prefix_metric_strict_count += 1
         elif prefix_metric_check == "token_fallback":
@@ -103,4 +107,10 @@ def recommend_runs(
             if prefix_metric_other_count == len(runs)
             else "mixed"
         ),
+        "evidence_quality": (
+            "missing"
+            if not runs or evidence_quality_counts["missing"] == len(runs)
+            else next((quality for quality in ("strict", "estimated", "fallback") if evidence_quality_counts[quality] == len(runs)), "mixed")
+        ),
+        "evidence_quality_counts": evidence_quality_counts,
     }

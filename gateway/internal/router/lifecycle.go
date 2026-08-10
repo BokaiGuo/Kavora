@@ -25,11 +25,12 @@ type LifecycleGates struct {
 }
 
 type LifecycleConfig struct {
-	Enabled       bool           `yaml:"enabled" json:"enabled"`
-	PolicyVersion string         `yaml:"policy_version" json:"policy_version"`
-	MinRequests   int            `yaml:"min_requests" json:"min_requests"`
-	CanarySteps   []float64      `yaml:"canary_steps" json:"canary_steps"`
-	Gates         LifecycleGates `yaml:"gates" json:"gates"`
+	Enabled              bool           `yaml:"enabled" json:"enabled"`
+	RequireHumanApproval bool           `yaml:"require_human_approval" json:"require_human_approval"`
+	PolicyVersion        string         `yaml:"policy_version" json:"policy_version"`
+	MinRequests          int            `yaml:"min_requests" json:"min_requests"`
+	CanarySteps          []float64      `yaml:"canary_steps" json:"canary_steps"`
+	Gates                LifecycleGates `yaml:"gates" json:"gates"`
 }
 
 type LifecycleObservation struct {
@@ -43,10 +44,17 @@ type LifecycleObservation struct {
 }
 
 type LifecycleSnapshot struct {
-	Stage          LifecycleStage `json:"stage"`
-	CanaryFraction float64        `json:"canary_fraction"`
-	PolicyVersion  string         `json:"policy_version"`
-	LastReason     string         `json:"last_reason"`
+	Stage            LifecycleStage `json:"stage"`
+	CanaryFraction   float64        `json:"canary_fraction"`
+	PolicyVersion    string         `json:"policy_version"`
+	LastReason       string         `json:"last_reason"`
+	ApprovalRequired bool           `json:"approval_required"`
+	Approved         bool           `json:"approved"`
+	ApprovedBy       string         `json:"approved_by,omitempty"`
+}
+
+type LifecycleApproval struct {
+	ApprovedBy string `json:"approved_by"`
 }
 
 type Lifecycle struct {
@@ -55,6 +63,8 @@ type Lifecycle struct {
 	stage      LifecycleStage
 	step       int
 	lastReason string
+	approved   bool
+	approvedBy string
 }
 
 func NewLifecycle(config LifecycleConfig) (*Lifecycle, error) {
@@ -102,7 +112,16 @@ func (lifecycle *Lifecycle) Snapshot() LifecycleSnapshot {
 	if lifecycle.stage == StageEnforced {
 		fraction = 1
 	}
-	return LifecycleSnapshot{Stage: lifecycle.stage, CanaryFraction: fraction, PolicyVersion: lifecycle.config.PolicyVersion, LastReason: lifecycle.lastReason}
+	return LifecycleSnapshot{Stage: lifecycle.stage, CanaryFraction: fraction, PolicyVersion: lifecycle.config.PolicyVersion, LastReason: lifecycle.lastReason, ApprovalRequired: lifecycle.config.RequireHumanApproval, Approved: lifecycle.approved, ApprovedBy: lifecycle.approvedBy}
+}
+
+func (lifecycle *Lifecycle) Approve(approval LifecycleApproval) LifecycleSnapshot {
+	lifecycle.mu.Lock()
+	defer lifecycle.mu.Unlock()
+	if lifecycle.config.RequireHumanApproval && lifecycle.stage == StageShadow && approval.ApprovedBy != "" {
+		lifecycle.approved, lifecycle.approvedBy, lifecycle.lastReason = true, approval.ApprovedBy, "human_approved"
+	}
+	return lifecycle.snapshotLocked()
 }
 
 func (lifecycle *Lifecycle) Enforces(requestID string) bool {
@@ -119,7 +138,7 @@ func (lifecycle *Lifecycle) Observe(observation LifecycleObservation) LifecycleS
 		return lifecycle.snapshotLocked()
 	}
 	if !observation.StateHealthy || !observation.PolicyHealthy {
-		lifecycle.stage, lifecycle.step, lifecycle.lastReason = StageStatic, 0, "unhealthy_state_or_policy"
+		lifecycle.stage, lifecycle.step, lifecycle.lastReason, lifecycle.approved, lifecycle.approvedBy = StageStatic, 0, "unhealthy_state_or_policy", false, ""
 		return lifecycle.snapshotLocked()
 	}
 	if observation.Requests < lifecycle.config.MinRequests {
@@ -128,7 +147,11 @@ func (lifecycle *Lifecycle) Observe(observation LifecycleObservation) LifecycleS
 	}
 	gates := lifecycle.config.Gates
 	if observation.P95RegressionPercent > gates.MaxP95RegressionPercent || observation.ErrorDelta > gates.MaxErrorDelta || observation.FallbackRate > gates.MaxFallbackRate || observation.SLOViolationRate > gates.MaxSLOViolationRate {
-		lifecycle.stage, lifecycle.step, lifecycle.lastReason = StageStatic, 0, "quality_gate_failed"
+		lifecycle.stage, lifecycle.step, lifecycle.lastReason, lifecycle.approved, lifecycle.approvedBy = StageStatic, 0, "quality_gate_failed", false, ""
+		return lifecycle.snapshotLocked()
+	}
+	if lifecycle.stage == StageShadow && lifecycle.config.RequireHumanApproval && !lifecycle.approved {
+		lifecycle.lastReason = "human_approval_required"
 		return lifecycle.snapshotLocked()
 	}
 	switch lifecycle.stage {
@@ -155,5 +178,5 @@ func (lifecycle *Lifecycle) snapshotLocked() LifecycleSnapshot {
 	if lifecycle.stage == StageEnforced {
 		fraction = 1
 	}
-	return LifecycleSnapshot{Stage: lifecycle.stage, CanaryFraction: fraction, PolicyVersion: lifecycle.config.PolicyVersion, LastReason: lifecycle.lastReason}
+	return LifecycleSnapshot{Stage: lifecycle.stage, CanaryFraction: fraction, PolicyVersion: lifecycle.config.PolicyVersion, LastReason: lifecycle.lastReason, ApprovalRequired: lifecycle.config.RequireHumanApproval, Approved: lifecycle.approved, ApprovedBy: lifecycle.approvedBy}
 }

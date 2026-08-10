@@ -28,6 +28,11 @@ class PromWriter:
             "1 when prefix hit ratio falls back to token counters such as cached_tokens_total/prompt_tokens_total",
             registry=self.registry,
         )
+        self._prefix_metric_estimated = Gauge(
+            "kvcache_exporter_prefix_metric_estimated",
+            "1 when prefix evidence is estimated rather than strict or fallback",
+            registry=self.registry,
+        )
         names = [
             ("kvcache_kv_total_blocks", "Total blocks"),
             ("kvcache_kv_active_blocks", "Active blocks"),
@@ -84,10 +89,12 @@ class PromWriter:
                 "basis": snap.prefix_metric_basis or "missing",
                 "hits_metric": snap.prefix_hits_metric_name or "missing",
                 "queries_metric": snap.prefix_queries_metric_name or "missing",
+                "evidence_quality": snap.prefix_evidence_quality or "missing",
             }
         )
         self._prefix_metric_comparable.set(1.0 if snap.prefix_metric_comparability == "strict" else 0.0)
         self._prefix_metric_token_fallback.set(1.0 if snap.prefix_metric_semantics == "token_counter_fallback" else 0.0)
+        self._prefix_metric_estimated.set(1.0 if snap.prefix_evidence_quality == "estimated" else 0.0)
 
     def set_scrape_health(self, *, last_success_ts: float | None, consecutive_failures: int) -> None:
         if last_success_ts is not None:

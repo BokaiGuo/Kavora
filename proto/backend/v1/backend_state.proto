@@ -12,6 +12,14 @@ enum SignalQuality {
   SIGNAL_QUALITY_INVALID = 4;
 }
 
+enum EvidenceQuality {
+  EVIDENCE_QUALITY_UNSPECIFIED = 0;
+  EVIDENCE_QUALITY_STRICT = 1;
+  EVIDENCE_QUALITY_ESTIMATED = 2;
+  EVIDENCE_QUALITY_FALLBACK = 3;
+  EVIDENCE_QUALITY_MISSING = 4;
+}
+
 message Signal {
   double value = 1;
   bool has_value = 2;
@@ -19,6 +27,7 @@ message Signal {
   string source = 4;
   int64 observed_at_unix_millis = 5;
   string semantics = 6;
+  EvidenceQuality evidence_quality = 7;
 }
 
 message NamedSignal {

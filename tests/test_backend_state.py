@@ -22,6 +22,8 @@ def test_backend_state_golden_preserves_missing_signal() -> None:
     assert snapshot["signals"]["cache_hit_ratio"]["value"] == 0.0
     assert snapshot["signals"]["queue_depth"]["value"] == 3
     assert snapshot["signals"]["running_requests"]["value"] == 2
+    assert snapshot["signals"]["cache_hit_ratio"]["evidence_quality"] == "missing"
+    assert snapshot["signals"]["effective_residency_perc"]["evidence_quality"] == "missing"
     for name, signal in golden["signals"].items():
         assert snapshot["signals"][name] == signal
 

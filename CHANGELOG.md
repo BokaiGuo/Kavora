@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added backend semantic alignment with `strict`, `estimated`, `fallback`, and `missing` evidence quality across exporter snapshots, Prometheus self-checks, planner artifacts, advice, and routing decisions.
+- Added an SLO-aware automatic calibrator that scans cache thresholds and concurrency points, ranks RPS lower bounds with instability/evidence penalties, and emits human-approval deployment plans.
+- Added `kavora replay` for deterministic comparison of baseline and candidate policies over prompt-free workload signatures.
+- Added a mandatory human approval gate before shadow policies can enter canary rollout; rollback clears prior approval.
 - Added pluggable cache-state providers for no evidence, affinity, shadow residency, and exact KV events with explicit quality, provenance, matched-token, and confidence fields.
 - Added constraint-first and SLO-aware routing, a bounded per-request decision ledger, authenticated admin APIs, and a GUI Decision Inspector.
 - Added shadow-to-canary-to-enforced lifecycle gates with deterministic sampling and automatic static rollback on unhealthy state, policy failure, regression, error, fallback, or SLO gates.
@@ -13,6 +17,7 @@
 
 ### Changed
 
+- Capacity sweep artifacts now embed an automatic operating-envelope recommendation and rejected-alternative explanations.
 - Reframed the primary project narrative around an evidence-aware inference control plane rather than feature breadth or agent expansion.
 - Gateway routing now hard-filters backend attributes before confidence-weighted cache, queue, KV-pressure, predicted-TTFT, and SLO scoring.
 - `make benchmark-stage2` now requires explicit real endpoints and no longer emits synthetic proxy performance rows.

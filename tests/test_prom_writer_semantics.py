@@ -23,6 +23,7 @@ def _snapshot(*, semantics: str, comparability: str, basis: str, hits_metric: st
         prefix_metric_semantics=semantics,
         prefix_metric_comparability=comparability,
         prefix_metric_basis=basis,
+        prefix_evidence_quality="fallback",
     )
 
 
@@ -46,3 +47,5 @@ def test_prom_writer_exports_prefix_metric_semantics_self_check() -> None:
     assert 'hits_metric="sglang:cached_tokens_total"' in payload
     assert "kvcache_exporter_prefix_metric_comparable 0.0" in payload
     assert "kvcache_exporter_prefix_metric_token_fallback 1.0" in payload
+    assert 'evidence_quality="fallback"' in payload
+    assert "kvcache_exporter_prefix_metric_estimated 0.0" in payload

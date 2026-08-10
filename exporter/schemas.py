@@ -30,6 +30,8 @@ class NativeSnapshot(BaseModel):
     prefix_metric_semantics: str = "missing"
     prefix_metric_comparability: str = "missing"
     prefix_metric_basis: str = "missing"
+    prefix_evidence_quality: str = "missing"
+    block_evidence_quality: str = "missing"
     queue_depth: float | None = None
     running_requests: float | None = None
     extra: dict[str, float] = Field(default_factory=dict)
@@ -57,5 +59,7 @@ class DerivedSnapshot(BaseModel):
     prefix_metric_semantics: str = "missing"
     prefix_metric_comparability: str = "missing"
     prefix_metric_basis: str = "missing"
+    prefix_evidence_quality: str = "missing"
+    block_evidence_quality: str = "missing"
     queue_depth: float | None = None
     running_requests: float | None = None

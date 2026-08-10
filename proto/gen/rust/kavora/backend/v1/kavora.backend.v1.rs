@@ -14,6 +14,8 @@ pub struct Signal {
     pub observed_at_unix_millis: i64,
     #[prost(string, tag = "6")]
     pub semantics: ::prost::alloc::string::String,
+    #[prost(enumeration = "EvidenceQuality", tag = "7")]
+    pub evidence_quality: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NamedSignal {
@@ -83,6 +85,41 @@ impl SignalQuality {
             "SIGNAL_QUALITY_STALE" => Some(Self::Stale),
             "SIGNAL_QUALITY_MISSING" => Some(Self::Missing),
             "SIGNAL_QUALITY_INVALID" => Some(Self::Invalid),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum EvidenceQuality {
+    Unspecified = 0,
+    Strict = 1,
+    Estimated = 2,
+    Fallback = 3,
+    Missing = 4,
+}
+impl EvidenceQuality {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "EVIDENCE_QUALITY_UNSPECIFIED",
+            Self::Strict => "EVIDENCE_QUALITY_STRICT",
+            Self::Estimated => "EVIDENCE_QUALITY_ESTIMATED",
+            Self::Fallback => "EVIDENCE_QUALITY_FALLBACK",
+            Self::Missing => "EVIDENCE_QUALITY_MISSING",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "EVIDENCE_QUALITY_UNSPECIFIED" => Some(Self::Unspecified),
+            "EVIDENCE_QUALITY_STRICT" => Some(Self::Strict),
+            "EVIDENCE_QUALITY_ESTIMATED" => Some(Self::Estimated),
+            "EVIDENCE_QUALITY_FALLBACK" => Some(Self::Fallback),
+            "EVIDENCE_QUALITY_MISSING" => Some(Self::Missing),
             _ => None,
         }
     }

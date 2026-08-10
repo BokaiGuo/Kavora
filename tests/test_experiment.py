@@ -39,6 +39,7 @@ def test_summarize_entry_quality_prefers_window_value() -> None:
         "cache_hit_ratio": 0.7,
         "metric_quality": "ok",
         "hit_ratio_source": "window",
+        "evidence_quality": "missing",
     }
 
 

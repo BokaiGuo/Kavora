@@ -44,6 +44,7 @@ GET  /v1/admin/decisions?limit=20
 GET  /v1/admin/decisions/{request_id}
 GET  /v1/admin/lifecycle
 POST /v1/admin/lifecycle
+POST /v1/admin/lifecycle/approve
 POST /v1/admin/cache-events
 ```
 

@@ -28,3 +28,25 @@ func TestLifecycleUnhealthySignalAlwaysRollsBack(t *testing.T) {
 		t.Fatalf("snapshot=%+v", snapshot)
 	}
 }
+
+func TestLifecycleRequiresHumanApprovalBeforeCanary(t *testing.T) {
+	lifecycle, err := NewLifecycle(LifecycleConfig{Enabled: true, RequireHumanApproval: true, MinRequests: 10, Gates: LifecycleGates{MaxP95RegressionPercent: 5, MaxErrorDelta: .01, MaxFallbackRate: .02, MaxSLOViolationRate: .05}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := LifecycleObservation{Requests: 10, StateHealthy: true, PolicyHealthy: true}
+	if snapshot := lifecycle.Observe(good); snapshot.Stage != StageShadow || snapshot.LastReason != "human_approval_required" {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+	if snapshot := lifecycle.Approve(LifecycleApproval{ApprovedBy: "operator"}); !snapshot.Approved || snapshot.ApprovedBy != "operator" {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+	if snapshot := lifecycle.Observe(good); snapshot.Stage != StageCanary || snapshot.CanaryFraction != .05 {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+	bad := good
+	bad.StateHealthy = false
+	if snapshot := lifecycle.Observe(bad); snapshot.Approved {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+}

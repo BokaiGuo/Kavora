@@ -215,8 +215,12 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 			}
 		}
 		evidence := provider.Match(ctx, CacheMatchRequest{RequestID: request.RequestID, TenantID: request.TenantID, CacheKey: request.CacheKey, PromptTokens: request.PromptTokens}, CacheBackend{ID: backend.ID, State: state})
+		if evidence.EvidenceQuality == "" {
+			evidence.EvidenceQuality = "missing"
+		}
 		candidate.PrefixMatch, candidate.MatchedTokens = evidence.MatchRatio, evidence.MatchedTokens
 		candidate.CacheSource, candidate.CacheQuality, candidate.CacheConfidence = evidence.Source, evidence.Quality, evidence.Confidence
+		candidate.EvidenceQuality = evidence.EvidenceQuality
 		candidate.PredictedTTFTMS = predictor.Predict(request.PromptTokens, evidence.MatchedTokens, candidate.QueueDepth, candidate.KVPressure, candidate.RecentPrefillRate)
 		candidate.SLOViolationProbability = predictor.ViolationProbability(candidate.PredictedTTFTMS, request.TTFTSLOMS)
 		confidence := evidence.Confidence

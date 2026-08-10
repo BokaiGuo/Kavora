@@ -89,6 +89,8 @@ def test_sglang_adapter_supports_cached_token_metrics(monkeypatch) -> None:
     assert native.prefix_metric_semantics == "token_counter_fallback"
     assert native.prefix_metric_comparability == "directional"
     assert native.prefix_metric_basis == "tokens"
+    assert native.prefix_evidence_quality == "fallback"
+    assert native.block_evidence_quality == "estimated"
 
 
 def test_vllm_adapter_preserves_queue_signals(monkeypatch) -> None:
@@ -98,3 +100,5 @@ def test_vllm_adapter_preserves_queue_signals(monkeypatch) -> None:
 
     assert native.queue_depth == 3.0
     assert native.running_requests == 2.0
+    assert native.prefix_evidence_quality == "missing"
+    assert native.block_evidence_quality == "estimated"

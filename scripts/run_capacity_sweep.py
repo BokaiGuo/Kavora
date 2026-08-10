@@ -23,6 +23,7 @@ from benchmark.experiment import (
     scenario_config,
 )
 from planner.policy import recommend_runs
+from planner.auto_calibrator import CalibrationConstraints, CalibrationWeights, calibrate
 
 
 def _parse_csv_ints(raw: str) -> list[int]:
@@ -128,6 +129,7 @@ def _build_point_recommendation(
         "num_runs_missing_hit_ratio": int(dual["num_runs_missing_hit_ratio"]),
         "num_runs_stale_metrics": int(dual["num_runs_stale_metrics"]),
         "hit_ratio_comparable": bool(dual["hit_ratio_comparable"]),
+        "evidence_quality": str(dual["evidence_quality"]),
     }
 
 
@@ -291,6 +293,16 @@ def _to_markdown(doc: dict[str, Any], *, ranking_plot_name: str) -> str:
             lines.append(
                 f"- {scenario}: best safe point is concurrency={best_safe['concurrency']} dual_rps={best_safe['dual_boundary_recommended_rps']:.4f}."
             )
+    calibration = doc.get("calibration", {})
+    lines.extend(["", "## Auto Calibration", ""])
+    if calibration.get("recommendation"):
+        recommendation = calibration["recommendation"]
+        lines.append(
+            f"- threshold={recommendation['min_hit_ratio']:.2f}, max_concurrency={recommendation['max_concurrency']}, expected_rps={recommendation['expected_rps']:.3f}, confidence={recommendation['confidence']:.3f}, evidence={recommendation['evidence_quality']}."
+        )
+        lines.append(f"- deployment: {calibration['deployment']['status']} -> {calibration['deployment']['recommended_action']}.")
+    else:
+        lines.append("- calibration blocked: no point passed all evidence and SLO gates.")
     lines.append("")
     return "\n".join(lines)
 
@@ -394,6 +406,11 @@ def main() -> None:
     for point in points:
         point["ranking"] = _point_rank_record(point)
 
+    calibration = calibrate(
+        points,
+        constraints=CalibrationConstraints(args.e2e_p95_slo_ms, args.min_success_rate, args.repeats),
+        weights=CalibrationWeights(safety_factor=args.safety_factor),
+    )
     doc = {
         "meta": {
             "experiment_schema_version": EXPERIMENT_SCHEMA_VERSION,
@@ -421,6 +438,7 @@ def main() -> None:
         },
         "points": points,
         "ranking": ranking,
+        "calibration": calibration,
     }
 
     out_png = Path(args.out_png) if args.out_png else (out_dir / "capacity_sweep_ranking.png")

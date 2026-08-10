@@ -8,7 +8,7 @@
 ![Go](https://img.shields.io/badge/Go-gateway-00ADD8?logo=go&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-policy%20%26%20runtime-000000?logo=rust&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-observability%20%26%20research-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/python%20tests-83%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/python%20tests-86%20passing-2ea44f)
 
 Kavora is an open-source **evidence-aware AI inference control plane** for local and private LLM serving. It turns cache fidelity, state freshness, tenant constraints, and latency objectives into an inspectable backend decision rather than hiding placement behind a heuristic.
 
@@ -90,8 +90,10 @@ flowchart LR
 - Versioned backend-state snapshots and persistent tuning advice.
 - Digest-verified Wasmtime execution with resource and capability controls.
 - Reproducible benchmarks, replay artifacts, promotion gates, and Markdown/JSON reports.
+- Semantic evidence alignment, automatic SLO threshold/concurrency calibration, and anonymous pre-canary workload replay.
 
 See [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md) for the cache-evidence contract, decision API, lifecycle configuration, and fidelity/lag ablation.
+See [`docs/stage5_self_tuning.md`](docs/stage5_self_tuning.md) for semantic alignment, automatic calibration, anonymous replay, human approval, and rollback.
 
 ## Quick Start
 
@@ -221,6 +223,19 @@ This starts two vLLM replicas, two Observers, one Rust Policy Engine, and four i
 ```bash
 make research-report
 ```
+
+### Calibrate and replay before canary
+
+```bash
+make auto-calibrate INPUT=results/capacity_sweeps/local/summary.json
+build/kavora replay benchmark/workload_trace.example.jsonl \
+  --policy candidate \
+  --min-hit-ratio 0.40 \
+  --max-concurrency 16 \
+  --evidence-quality strict
+```
+
+Kavora does not automatically edit production configuration. A candidate must pass experiment and replay gates, receive explicit human approval, and then progress through the configured canary lifecycle.
 
 Generated artifacts:
 

@@ -40,16 +40,16 @@ def _pick_metric_with_name(metrics: dict[str, float], candidates: list[str], def
     return default, ""
 
 
-def _prefix_metric_metadata(hits_metric_name: str, queries_metric_name: str) -> tuple[str, str, str]:
+def _prefix_metric_metadata(hits_metric_name: str, queries_metric_name: str) -> tuple[str, str, str, str]:
     token_fallback_hits = {"sglang:cached_tokens_total", "sglang_cached_tokens_total"}
     token_fallback_queries = {"sglang:prompt_tokens_total", "sglang_prompt_tokens_total"}
     if hits_metric_name and queries_metric_name:
         if hits_metric_name in token_fallback_hits and queries_metric_name in token_fallback_queries:
-            return "token_counter_fallback", "directional", "tokens"
-        return "prefix_query_counters", "strict", "queries"
+            return "token_counter_fallback", "directional", "tokens", "fallback"
+        return "prefix_query_counters", "strict", "queries", "strict"
     if hits_metric_name or queries_metric_name:
-        return "partial", "missing", "mixed"
-    return "missing", "missing", "missing"
+        return "partial", "missing", "mixed", "missing"
+    return "missing", "missing", "missing", "missing"
 
 
 class SGLangAdapter:
@@ -77,11 +77,17 @@ class SGLangAdapter:
             resp.raise_for_status()
             m = _parse_metrics_body(resp.text)
 
-        total_blocks = _pick_metric(m, ["sglang:kv_total_blocks", "sglang_kv_total_blocks"])
+        total_block_names = {"sglang:kv_total_blocks", "sglang_kv_total_blocks"}
+        active_block_names = {"sglang_obs:kv_active_blocks", "sglang_kv_active_blocks"}
+        reusable_block_names = {"sglang_obs:kv_reusable_cached_blocks", "sglang_kv_reusable_cached_blocks"}
+        free_block_names = {"sglang_obs:kv_free_uncached_blocks", "sglang_kv_free_uncached_blocks"}
+        total_blocks = _pick_metric(m, list(total_block_names))
+        block_evidence_quality = "missing"
         if total_blocks == 0.0:
             total_tokens = _pick_metric(m, ["sglang:max_total_num_tokens", "sglang_max_total_num_tokens"])
             if total_tokens > 0.0:
                 total_blocks = self._tokens_to_blocks(total_tokens)
+                block_evidence_quality = "estimated"
         usage_perc = _pick_metric(
             m,
             [
@@ -91,7 +97,7 @@ class SGLangAdapter:
                 "sglang_token_usage",
             ],
         )
-        active_blocks = _pick_metric(m, ["sglang_obs:kv_active_blocks", "sglang_kv_active_blocks"])
+        active_blocks = _pick_metric(m, list(active_block_names))
         if active_blocks == 0.0:
             active_tokens = _pick_metric(m, ["sglang:num_used_tokens", "sglang_num_used_tokens"])
             if active_tokens > 0.0:
@@ -104,6 +110,10 @@ class SGLangAdapter:
         )
         if free_uncached_blocks == 0.0 and total_blocks > 0.0 and active_blocks > 0.0:
             free_uncached_blocks = max(0.0, total_blocks - active_blocks)
+        if all(any(name in m for name in names) for names in (total_block_names, active_block_names, reusable_block_names, free_block_names)):
+            block_evidence_quality = "strict"
+        elif total_blocks > 0 or usage_perc > 0:
+            block_evidence_quality = "estimated"
         prefix_hits, prefix_hits_metric_name = _pick_metric_with_name(
             m,
             [
@@ -126,7 +136,7 @@ class SGLangAdapter:
                 "sglang_prompt_tokens_total",
             ],
         )
-        prefix_metric_semantics, prefix_metric_comparability, prefix_metric_basis = _prefix_metric_metadata(
+        prefix_metric_semantics, prefix_metric_comparability, prefix_metric_basis, prefix_evidence_quality = _prefix_metric_metadata(
             prefix_hits_metric_name, prefix_queries_metric_name
         )
 
@@ -150,6 +160,8 @@ class SGLangAdapter:
             prefix_metric_semantics=prefix_metric_semantics,
             prefix_metric_comparability=prefix_metric_comparability,
             prefix_metric_basis=prefix_metric_basis,
+            prefix_evidence_quality=prefix_evidence_quality,
+            block_evidence_quality=block_evidence_quality,
             queue_depth=_pick_metric_optional(
                 m, ["sglang:num_queue_reqs", "sglang_num_queue_reqs", "sglang:num_requests_waiting"]
             ),

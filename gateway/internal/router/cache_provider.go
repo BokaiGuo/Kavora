@@ -41,12 +41,13 @@ type CacheBackend struct {
 }
 
 type CacheEvidence struct {
-	MatchedTokens int         `json:"matched_tokens"`
-	MatchRatio    float64     `json:"match_ratio"`
-	Source        CacheSource `json:"source"`
-	ObservedAt    time.Time   `json:"observed_at,omitempty"`
-	Quality       Quality     `json:"quality"`
-	Confidence    float64     `json:"confidence"`
+	MatchedTokens   int         `json:"matched_tokens"`
+	MatchRatio      float64     `json:"match_ratio"`
+	Source          CacheSource `json:"source"`
+	ObservedAt      time.Time   `json:"observed_at,omitempty"`
+	Quality         Quality     `json:"quality"`
+	Confidence      float64     `json:"confidence"`
+	EvidenceQuality string      `json:"evidence_quality"`
 }
 
 type CacheStateProvider interface {
@@ -83,12 +84,13 @@ func (p *AffinityProvider) Match(_ context.Context, request CacheMatchRequest, b
 		return missingCacheEvidence(CacheSourceAffinity)
 	}
 	return CacheEvidence{
-		MatchedTokens: maxInt(request.PromptTokens, 0),
-		MatchRatio:    1,
-		Source:        CacheSourceAffinity,
-		ObservedAt:    p.now().UTC(),
-		Quality:       QualityFresh,
-		Confidence:    p.confidence,
+		MatchedTokens:   maxInt(request.PromptTokens, 0),
+		MatchRatio:      1,
+		Source:          CacheSourceAffinity,
+		ObservedAt:      p.now().UTC(),
+		Quality:         QualityFresh,
+		Confidence:      p.confidence,
+		EvidenceQuality: "estimated",
 	}
 }
 
@@ -123,12 +125,13 @@ func (p *ShadowIndexProvider) Match(_ context.Context, request CacheMatchRequest
 		confidence = 0
 	}
 	return CacheEvidence{
-		MatchedTokens: int(math.Round(float64(maxInt(request.PromptTokens, 0)) * ratio)),
-		MatchRatio:    ratio,
-		Source:        CacheSourceShadow,
-		ObservedAt:    observedAt,
-		Quality:       quality,
-		Confidence:    confidence,
+		MatchedTokens:   int(math.Round(float64(maxInt(request.PromptTokens, 0)) * ratio)),
+		MatchRatio:      ratio,
+		Source:          CacheSourceShadow,
+		ObservedAt:      observedAt,
+		Quality:         quality,
+		Confidence:      confidence,
+		EvidenceQuality: backendstate.EvidenceQualityOf(signal),
 	}
 }
 
@@ -245,17 +248,18 @@ func (p *KVEventProvider) Match(_ context.Context, request CacheMatchRequest, ba
 		confidence = confidenceForAge(age, p.lambda)
 	}
 	return CacheEvidence{
-		MatchedTokens: matched,
-		MatchRatio:    ratio,
-		Source:        CacheSourceKVEvents,
-		ObservedAt:    event.ObservedAt.UTC(),
-		Quality:       quality,
-		Confidence:    confidence,
+		MatchedTokens:   matched,
+		MatchRatio:      ratio,
+		Source:          CacheSourceKVEvents,
+		ObservedAt:      event.ObservedAt.UTC(),
+		Quality:         quality,
+		Confidence:      confidence,
+		EvidenceQuality: "strict",
 	}
 }
 
 func missingCacheEvidence(source CacheSource) CacheEvidence {
-	return CacheEvidence{Source: source, Quality: QualityMissing}
+	return CacheEvidence{Source: source, Quality: QualityMissing, EvidenceQuality: "missing"}
 }
 
 func confidenceForAge(age time.Duration, lambda float64) float64 {

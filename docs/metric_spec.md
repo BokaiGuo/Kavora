@@ -13,6 +13,15 @@
 - `benchmark/window_metrics.py`
 - `scripts/run_reuse_experiment.py`
 
+## 证据质量与运行质量
+
+缓存指标现在显式携带两个互相独立的维度：
+
+- `quality`：`fresh / stale / missing / invalid`，回答当前观测是否新鲜、有效；
+- `evidence_quality`：`strict / estimated / fallback / missing`，回答指标与目标缓存语义有多接近。
+
+Planner 不得把 fresh 的 token-counter fallback 当成 strict prefix-query counter。vLLM/SGLang 的 prefix query counters 标为 `strict`，容量或 token-to-block 推导标为 `estimated`，SGLang cached-token/prompt-token 兼容路径标为 `fallback`。
+
 ---
 
 ## 1) Prometheus 聚合策略（label-aware）

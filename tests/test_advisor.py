@@ -16,3 +16,8 @@ def test_advice_preserves_missing_signal_semantics():
 def test_advice_reports_pressure():
     result = build_advice(snap(effective_residency_perc=.95))
     assert any(item["code"] == "kv_pressure_high" for item in result["recommendations"])
+
+
+def test_advice_blocks_promotion_on_fallback_evidence():
+    result = build_advice(snap(cache_hit_ratio=.6, prefix_evidence_quality="fallback"))
+    assert any(item["code"] == "cache_evidence_not_strict" for item in result["recommendations"])

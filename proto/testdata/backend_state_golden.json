@@ -8,6 +8,7 @@
   "schema_version": "kavora.backend-state/v1",
   "signals": {
     "active_blocks": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -16,6 +17,7 @@
       "value": 20.0
     },
     "cache_hit_ratio": {
+      "evidence_quality": "missing",
       "has_value": false,
       "observed_at_unix_millis": 1700000000000,
       "quality": "missing",
@@ -24,6 +26,7 @@
       "value": 0.0
     },
     "cold_free_perc": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -32,6 +35,7 @@
       "value": 0.2
     },
     "duplicate_cached_blocks": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -40,6 +44,7 @@
       "value": 2.0
     },
     "effective_residency_perc": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -48,6 +53,7 @@
       "value": 0.8
     },
     "free_uncached_blocks": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -56,6 +62,7 @@
       "value": 20.0
     },
     "hidden_reuse_ready_perc": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -64,6 +71,7 @@
       "value": 0.6
     },
     "reusable_cached_blocks": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -72,6 +80,7 @@
       "value": 60.0
     },
     "total_blocks": {
+      "evidence_quality": "missing",
       "has_value": true,
       "observed_at_unix_millis": 1700000000000,
       "quality": "fresh",
@@ -80,5 +89,5 @@
       "value": 100.0
     }
   },
-  "snapshot_hash": "82ac37d4f7a5ac14d743c43d0125d7731e98b28cf11f0f417796d95f24e32ff8"
+  "snapshot_hash": "ef45c05b74e8b97dc72dcc658a1be17d69004d91571794c53366328ba99fc0f3"
 }

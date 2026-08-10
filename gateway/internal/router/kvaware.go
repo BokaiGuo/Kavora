@@ -16,6 +16,7 @@ type Candidate struct {
 	CacheSource             CacheSource `json:"cache_source"`
 	CacheQuality            Quality     `json:"cache_quality"`
 	CacheConfidence         float64     `json:"cache_confidence"`
+	EvidenceQuality         string      `json:"evidence_quality"`
 	QueueDepth              float64     `json:"queue_depth"`
 	KVPressure              float64     `json:"kv_pressure"`
 	RecentPrefillRate       float64     `json:"recent_prefill_tokens_per_second"`
