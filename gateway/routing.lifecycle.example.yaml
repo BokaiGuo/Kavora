@@ -1,0 +1,9 @@
+enabled: true
+policy_version: evidence-routing-v1
+min_requests: 500
+canary_steps: [0.05, 0.25, 0.50, 1.0]
+gates:
+  max_p95_regression_percent: 5.0
+  max_error_delta: 0.005
+  max_fallback_rate: 0.02
+  max_slo_violation_rate: 0.05

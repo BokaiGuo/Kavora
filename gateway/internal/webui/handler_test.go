@@ -5,7 +5,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/router"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/telemetry"
 )
 
@@ -24,6 +26,19 @@ func TestHandlerServesUIAndHealth(t *testing.T) {
 	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/ui/", nil))
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Kavora") {
 		t.Fatalf("UI response = %d %q", page.Code, page.Body.String())
+	}
+}
+
+func TestHandlerServesDecisionLedger(t *testing.T) {
+	controller := router.NewController(router.ModeStatic, nil)
+	controller.Ledger().Record(router.Decision{RequestID: "req-1", Reason: "test", OccurredAt: time.Now()})
+	handler := NewWithControlPlane(http.NotFoundHandler(), nil, nil, nil, controller, "secret")
+	request := httptest.NewRequest(http.MethodGet, "/v1/admin/decisions/req-1", nil)
+	request.Header.Set("Authorization", "Bearer secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"request_id":"req-1"`) {
+		t.Fatalf("response=%d %q", response.Code, response.Body.String())
 	}
 }
 

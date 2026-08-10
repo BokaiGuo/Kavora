@@ -236,7 +236,11 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	if result != nil && len(result.CacheKey) > 0 {
 		cacheKey = hex.EncodeToString(result.CacheKey)
 	}
-	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant.ID, cacheKey, stream)
+	promptTokens := 0
+	if result != nil && result.EstimatedTokens <= uint64(math.MaxInt) {
+		promptTokens = int(result.EstimatedTokens)
+	}
+	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant, cacheKey, promptTokens, stream)
 }
 
 func metricsOrDefault(metrics *telemetry.Metrics) *telemetry.Metrics {
@@ -370,8 +374,9 @@ func (server *Server) forward(
 	body []byte,
 	policyRequest *policyv1.EvaluateRequestRequest,
 	requestID string,
-	tenantID string,
+	activeTenant tenant.Tenant,
 	cacheKey string,
+	promptTokens int,
 	stream bool,
 ) {
 	var flusher http.Flusher
@@ -405,7 +410,7 @@ func (server *Server) forward(
 		}
 	}
 
-	candidates, routingDecision := server.backendCandidates(requestID, tenantID, cacheKey, policyRequest.Request.Model)
+	candidates, routingDecision := server.backendCandidates(requestID, activeTenant, cacheKey, promptTokens, policyRequest.Request.Model)
 	writer.Header().Set("X-Kavora-Routing-Mode", routingDecision.Mode)
 	writer.Header().Set("X-Kavora-Routing-Fallback", strconv.FormatBool(routingDecision.Fallback))
 	if routingDecision.Selected != "" {
@@ -449,6 +454,9 @@ func (server *Server) forward(
 		}
 		server.metrics.IncBackend(candidate.ID, "success")
 		writer.Header().Set("X-Kavora-Backend", candidate.ID)
+		if server.router != nil {
+			server.router.RecordActual(requestID, candidate.ID)
+		}
 		if stream {
 			server.forwardStream(writer, response, flusher, streamSession, requestID, policyRequest.Context.FailMode)
 		} else {
@@ -460,7 +468,7 @@ func (server *Server) forward(
 	writeGatewayError(writer, http.StatusBadGateway, "BACKEND_UNAVAILABLE", "all candidate backends failed before response", requestID)
 }
 
-func (server *Server) backendCandidates(requestID, tenantID, cacheKey, model string) ([]backend.Backend, router.Decision) {
+func (server *Server) backendCandidates(requestID string, activeTenant tenant.Tenant, cacheKey string, promptTokens int, model string) ([]backend.Backend, router.Decision) {
 	var candidates []backend.Backend
 	if server.backends != nil {
 		candidates = server.backends.Candidates(model)
@@ -468,10 +476,30 @@ func (server *Server) backendCandidates(requestID, tenantID, cacheKey, model str
 		candidates = []backend.Backend{{ID: "default", URL: server.backendURL}}
 	}
 	if server.router == nil {
-		return candidates, router.Decision{RequestID: requestID, TenantID: tenantID, Mode: string(router.ModeStatic), Reason: "static_round_robin"}
+		return candidates, router.Decision{RequestID: requestID, TenantID: activeTenant.ID, Mode: string(router.ModeStatic), Reason: "static_round_robin"}
 	}
-	decision := server.router.Decide(requestID, tenantID, cacheKey)
-	preferred := server.router.PreferredIDs(requestID, tenantID, cacheKey)
+	descriptors := make([]router.BackendDescriptor, 0, len(candidates))
+	for _, candidate := range candidates {
+		descriptors = append(descriptors, router.BackendDescriptor{ID: candidate.ID, Attributes: candidate.Attributes})
+	}
+	decision := server.router.Plan(context.Background(), router.RoutingRequest{
+		RequestID: requestID, TenantID: activeTenant.ID, Model: model, CacheKey: cacheKey, PromptTokens: promptTokens,
+		Requirements: activeTenant.RoutingRequirements, TTFTSLOMS: activeTenant.TTFTSLOMS,
+	}, descriptors)
+	eligible := map[string]bool{}
+	for _, candidate := range decision.Candidates {
+		if candidate.Eligible {
+			eligible[candidate.BackendID] = true
+		}
+	}
+	filtered := candidates[:0]
+	for _, candidate := range candidates {
+		if eligible[candidate.ID] {
+			filtered = append(filtered, candidate)
+		}
+	}
+	candidates = filtered
+	preferred := server.router.PreferredIDsForDecision(decision, cacheKey)
 	if len(preferred) == 0 {
 		return candidates, decision
 	}

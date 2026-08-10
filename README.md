@@ -2,15 +2,15 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> **Route intelligently. Govern safely. Remember efficiently.**
+> **Route by evidence. Govern by policy. Explain every placement.**
 
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 ![Go](https://img.shields.io/badge/Go-gateway-00ADD8?logo=go&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-policy%20%26%20runtime-000000?logo=rust&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-observability%20%26%20research-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-66%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/python%20tests-83%20passing-2ea44f)
 
-Kavora is an open-source **AI inference control plane** for local and private LLM serving.
+Kavora is an open-source **evidence-aware AI inference control plane** for local and private LLM serving. It turns cache fidelity, state freshness, tenant constraints, and latency objectives into an inspectable backend decision rather than hiding placement behind a heuristic.
 
 It combines three deliberately separated layers:
 
@@ -54,7 +54,7 @@ flowchart LR
     G --> T[Tenant Auth & Rate Limit]
     G --> P[Policy RPC]
     P --> R[Rust Policy Engine]
-    G --> Q[Static / Shadow / Enforced Router]
+    G --> Q[Evidence-aware Router]
     Q --> V[vLLM]
     Q --> S[SGLang]
     V --> O[Python Observer]
@@ -71,7 +71,7 @@ flowchart LR
 1. Client sends an OpenAI-compatible request to the Go Gateway.
 2. Go authenticates the tenant, applies limits and assigns a request ID.
 3. Rust evaluates JSON, PII, content, token budget and cache-key policy.
-4. Router selects a healthy backend using static, shadow or enforced mode.
+4. Router hard-filters tenant constraints, then scores cache evidence, queue/KV pressure, confidence, predicted TTFT, and SLO risk.
 5. Gateway preserves unary/SSE semantics and records metrics/audit events.
 6. Python Observer turns backend metrics into quality-aware state and tuning advice.
 
@@ -83,12 +83,15 @@ flowchart LR
 - Incremental JSON and SSE inspection with bounded streaming buffers.
 - PII and content filtering before backend dispatch and during streaming responses.
 - Backend health checks, model matching, weighted candidates, and failover.
-- Static, shadow, and enforced routing with stale/missing state fallback.
-- Tenant-scoped prefix affinity with TTL and capacity bounds.
+- Pluggable cache fidelity: none, affinity, shadow index, and exact KV events.
+- Constraint-first, SLO-aware routing with confidence decay and stale/missing fallback.
+- Bounded decision ledger, admin API, lifecycle gates, deterministic canaries, and GUI Decision Inspector.
 - Prometheus metrics, JSON audit events, request IDs, and an embedded GUI.
 - Versioned backend-state snapshots and persistent tuning advice.
 - Digest-verified Wasmtime execution with resource and capability controls.
 - Reproducible benchmarks, replay artifacts, promotion gates, and Markdown/JSON reports.
+
+See [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md) for the cache-evidence contract, decision API, lifecycle configuration, and fidelity/lag ablation.
 
 ## Quick Start
 

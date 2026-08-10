@@ -4,15 +4,15 @@
 
 **面向本地与私有化大模型推理服务的双语言 AI 推理控制平面。**
 
-> **智能路由，安全治理，高效记忆。**
+> **按证据路由，按策略治理，解释每次放置。**
 
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 ![Go](https://img.shields.io/badge/Go-gateway-00ADD8?logo=go&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-policy%20%26%20runtime-000000?logo=rust&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-observability%20%26%20research-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-66%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/python%20tests-83%20passing-2ea44f)
 
-Kavora 将 Go 网关、Rust 策略与安全运行时，以及 Python 可观测与实验层组合成一个可运行的 AI serving 控制平面。项目面向运行 vLLM、SGLang 等本地或私有化推理服务的工程师和研究者。
+Kavora 将 Go 网关、Rust 策略与安全运行时，以及 Python 可观测与实验层组合成一个可运行的**证据感知 AI serving 控制平面**。它把缓存证据精度、状态新鲜度、租户硬约束与延迟目标转化为可检查的后端决策，而不是隐藏在单一启发式规则里。
 
 - **Go**：OpenAI-compatible Gateway、租户控制、路由、流式传输、CLI 与 GUI
 - **Rust**：PII/内容策略、JSON/SSE 增量检查、Token budget、cache key 与 Wasmtime 执行
@@ -40,7 +40,7 @@ flowchart LR
     Gateway --> Tenant[租户认证与限流]
     Gateway --> RPC[Unix Socket / gRPC]
     RPC --> Policy[Rust Policy Engine]
-    Gateway --> Router[Static / Shadow / Enforced Router]
+    Gateway --> Router[证据感知 Router]
     Router --> VLLM[vLLM]
     Router --> SGLang[SGLang]
     VLLM --> Observer[Python Observer]
@@ -57,7 +57,7 @@ flowchart LR
 1. 客户端向 Go Gateway 发送 OpenAI-compatible 请求。
 2. Go 完成租户认证、限流并生成 request ID。
 3. Rust 执行 JSON、PII、内容、Token budget 和 cache-key 策略。
-4. Router 根据 static、shadow 或 enforced 模式选择健康后端。
+4. Router 先硬过滤租户约束，再综合缓存证据、队列/KV 压力、置信度、预测 TTFT 与 SLO 风险。
 5. Gateway 保持 unary/SSE 语义并记录指标与审计事件。
 6. Python Observer 将后端指标转换为带质量语义的状态和调优建议。
 
@@ -68,13 +68,16 @@ flowchart LR
 - 通过 Unix Socket 或 gRPC 调用 Rust Policy Engine。
 - 有界的 JSON/SSE 增量检查，支持流式响应中的策略拒绝。
 - 后端健康检查、模型匹配、加权候选和 failover。
-- Static、shadow、enforced 路由，以及 stale/missing 状态下的 static fallback。
-- 按租户隔离、带 TTL 和容量上限的 prefix affinity。
+- 可插拔缓存精度：none、affinity、shadow index 与 exact KV events。
+- 约束优先、SLO-aware 路由，以及置信度衰减和 stale/missing fallback。
+- 有界决策账本、管理 API、生命周期门禁、确定性 canary 与 GUI Decision Inspector。
 - Prometheus 指标、JSON 审计事件、request ID 和内嵌控制台 GUI。
 - 保留 `fresh`、`stale`、`missing`、`invalid` 的版本化 backend-state。
 - `/advice`、`backend-state.json` 和 `advice.jsonl` 持久化调优建议。
 - 带 digest、内存、实例、table、fuel、timeout 和 capability 限制的 Wasmtime worker。
 - 可复现 benchmark、replay、promotion gate 以及 JSON/Markdown 报告。
+
+缓存证据契约、决策 API、生命周期配置与 fidelity/lag 消融见 [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md)。
 
 ## 快速开始
 

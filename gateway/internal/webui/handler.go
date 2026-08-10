@@ -3,9 +3,12 @@ package webui
 import (
 	"embed"
 	"encoding/json"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/router"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/telemetry"
 )
 
@@ -17,6 +20,10 @@ func New(gateway http.Handler) http.Handler {
 }
 
 func NewWithObservability(gateway http.Handler, metrics *telemetry.Metrics, ready func() bool, backends func() any) http.Handler {
+	return NewWithControlPlane(gateway, metrics, ready, backends, nil, "")
+}
+
+func NewWithControlPlane(gateway http.Handler, metrics *telemetry.Metrics, ready func() bool, backends func() any, controller *router.Controller, adminToken string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
@@ -46,6 +53,69 @@ func NewWithObservability(gateway http.Handler, metrics *telemetry.Metrics, read
 		writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(writer).Encode(map[string]any{"backends": backends()})
 	})
+	if controller != nil {
+		mux.HandleFunc("/v1/admin/decisions", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet {
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			limit, _ := strconv.Atoi(request.URL.Query().Get("limit"))
+			writeJSON(writer, http.StatusOK, map[string]any{"decisions": controller.Ledger().Recent(limit)})
+		}))
+		mux.HandleFunc("/v1/admin/decisions/", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet {
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requestID := strings.TrimPrefix(request.URL.Path, "/v1/admin/decisions/")
+			decision, ok := controller.Ledger().Get(requestID)
+			if !ok {
+				http.Error(writer, "decision not found", http.StatusNotFound)
+				return
+			}
+			writeJSON(writer, http.StatusOK, decision)
+		}))
+		mux.HandleFunc("/v1/admin/lifecycle", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			lifecycle := controller.Lifecycle()
+			if lifecycle == nil {
+				http.Error(writer, "lifecycle unavailable", http.StatusNotImplemented)
+				return
+			}
+			switch request.Method {
+			case http.MethodGet:
+				writeJSON(writer, http.StatusOK, lifecycle.Snapshot())
+			case http.MethodPost:
+				var observation router.LifecycleObservation
+				if err := decodeJSON(request, &observation); err != nil {
+					http.Error(writer, err.Error(), http.StatusBadRequest)
+					return
+				}
+				writeJSON(writer, http.StatusOK, lifecycle.Observe(observation))
+			default:
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+		mux.HandleFunc("/v1/admin/cache-events", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodPost {
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var event router.KVEvent
+			if err := decodeJSON(request, &event); err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if event.BackendID == "" || event.CacheKey == "" || event.MatchedTokens < 0 || event.TotalTokens < 0 || (event.TotalTokens > 0 && event.MatchedTokens > event.TotalTokens) {
+				http.Error(writer, "invalid cache event", http.StatusBadRequest)
+				return
+			}
+			if !controller.ObserveKVEvent(event) {
+				http.Error(writer, "kv event provider is not active", http.StatusConflict)
+				return
+			}
+			writeJSON(writer, http.StatusAccepted, map[string]bool{"accepted": true})
+		}))
+	}
 	mux.HandleFunc("/ui", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, "/ui/", http.StatusMovedPermanently)
 	})
@@ -73,4 +143,26 @@ func NewWithObservability(gateway http.Handler, metrics *telemetry.Metrics, read
 	})
 	mux.Handle("/", gateway)
 	return mux
+}
+
+func admin(token string, handler http.HandlerFunc) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if token != "" && request.Header.Get("Authorization") != "Bearer "+token {
+			writer.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		handler(writer, request)
+	}
+}
+
+func decodeJSON(request *http.Request, target any) error {
+	defer request.Body.Close()
+	return json.NewDecoder(io.LimitReader(request.Body, 1<<20)).Decode(target)
+}
+
+func writeJSON(writer http.ResponseWriter, status int, value any) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(status)
+	_ = json.NewEncoder(writer).Encode(value)
 }

@@ -12,10 +12,12 @@ import (
 )
 
 type Tenant struct {
-	ID             string
-	MaxConcurrent  int
-	TokenBudget    uint64
-	PolicyFailMode policyv1.FailMode
+	ID                  string
+	MaxConcurrent       int
+	TokenBudget         uint64
+	PolicyFailMode      policyv1.FailMode
+	RoutingRequirements map[string]string
+	TTFTSLOMS           float64
 }
 
 type fileConfig struct {
@@ -24,11 +26,13 @@ type fileConfig struct {
 }
 
 type tenantConfig struct {
-	ID             string   `yaml:"id"`
-	APIKeys        []string `yaml:"api_keys"`
-	MaxConcurrent  int      `yaml:"max_concurrent"`
-	TokenBudget    uint64   `yaml:"token_budget"`
-	PolicyFailMode string   `yaml:"policy_fail_mode"`
+	ID                  string            `yaml:"id"`
+	APIKeys             []string          `yaml:"api_keys"`
+	MaxConcurrent       int               `yaml:"max_concurrent"`
+	TokenBudget         uint64            `yaml:"token_budget"`
+	PolicyFailMode      string            `yaml:"policy_fail_mode"`
+	RoutingRequirements map[string]string `yaml:"routing_requirements"`
+	TTFTSLOMS           float64           `yaml:"ttft_slo_ms"`
 }
 
 type Registry struct {
@@ -89,6 +93,17 @@ func validateTenant(config tenantConfig) (Tenant, error) {
 	if config.TokenBudget == 0 {
 		return Tenant{}, errors.New("token_budget must be positive")
 	}
+	if config.TTFTSLOMS < 0 {
+		return Tenant{}, errors.New("ttft_slo_ms must not be negative")
+	}
+	requirements := make(map[string]string, len(config.RoutingRequirements))
+	for key, value := range config.RoutingRequirements {
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if key == "" || value == "" {
+			return Tenant{}, errors.New("routing_requirements must not contain empty keys or values")
+		}
+		requirements[key] = value
+	}
 
 	var failMode policyv1.FailMode
 	switch strings.ToLower(strings.TrimSpace(config.PolicyFailMode)) {
@@ -99,7 +114,7 @@ func validateTenant(config tenantConfig) (Tenant, error) {
 	default:
 		return Tenant{}, errors.New("policy_fail_mode must be open or closed")
 	}
-	return Tenant{ID: config.ID, MaxConcurrent: config.MaxConcurrent, TokenBudget: config.TokenBudget, PolicyFailMode: failMode}, nil
+	return Tenant{ID: config.ID, MaxConcurrent: config.MaxConcurrent, TokenBudget: config.TokenBudget, PolicyFailMode: failMode, RoutingRequirements: requirements, TTFTSLOMS: config.TTFTSLOMS}, nil
 }
 
 func (registry *Registry) Authenticate(apiKey string) (Tenant, bool) {

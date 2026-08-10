@@ -5,6 +5,9 @@ tenants:
     max_concurrent: 4
     token_budget: 8192
     policy_fail_mode: closed
+    ttft_slo_ms: 250
+    routing_requirements:
+      trust_zone: local
 
   - id: availability-demo
     api_keys:
@@ -20,3 +23,7 @@ backends:
     weight: 1
     models: []
     health_path: /healthz
+    attributes:
+      trust_zone: local
+      local_only: "true"
+      accelerator: cpu

@@ -106,14 +106,14 @@ func run() error {
 	listenAddress := environmentOrDefault("KAVORA_GATEWAY_LISTEN", "127.0.0.1:18000")
 	server := &http.Server{
 		Addr: listenAddress,
-		Handler: webui.NewWithObservability(handler, metrics, func() bool {
+		Handler: webui.NewWithControlPlane(handler, metrics, func() bool {
 			return backends == nil || backends.HealthyCount() > 0
 		}, func() any {
 			if backends == nil {
 				return []backend.Status{}
 			}
 			return backends.Snapshot()
-		}),
+		}, kvRouter, os.Getenv("KAVORA_ADMIN_TOKEN")),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	shutdownContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -226,12 +226,40 @@ func runBackendStatePolling(ctx context.Context, controller *router.Controller, 
 
 func loadRouter() (*router.Controller, error) {
 	mode := router.Mode(os.Getenv("KAVORA_ROUTING_MODE"))
-	controller := router.NewController(mode, router.NewAffinity(4096, 5*time.Minute))
+	affinity := router.NewAffinity(4096, 5*time.Minute)
+	controller := router.NewController(mode, affinity)
 	maxStateAge, err := environmentDuration("KAVORA_BACKEND_STATE_MAX_AGE", 10*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	controller.SetMaxStateAge(maxStateAge)
+	switch environmentOrDefault("KAVORA_CACHE_FIDELITY", "affinity") {
+	case "none":
+		controller.SetCacheProvider(router.NoCacheProvider{})
+	case "affinity":
+		controller.SetCacheProvider(router.NewAffinityProvider(affinity, .65, nil))
+	case "shadow":
+		controller.SetCacheProvider(router.NewShadowIndexProvider(.55, maxStateAge, nil))
+	case "exact", "kv-events":
+		lambda, err := environmentNonNegativeFloat("KAVORA_CACHE_CONFIDENCE_LAMBDA", .1)
+		if err != nil {
+			return nil, err
+		}
+		controller.SetCacheProvider(router.NewKVEventProvider(65536, maxStateAge, lambda, nil))
+	default:
+		return nil, errors.New("KAVORA_CACHE_FIDELITY must be none, affinity, shadow, or exact")
+	}
+	if lifecyclePath := os.Getenv("KAVORA_ROUTING_LIFECYCLE_CONFIG"); lifecyclePath != "" {
+		data, err := os.ReadFile(lifecyclePath)
+		if err != nil {
+			return nil, fmt.Errorf("read routing lifecycle: %w", err)
+		}
+		lifecycle, err := router.LoadLifecycle(data)
+		if err != nil {
+			return nil, err
+		}
+		controller.SetLifecycle(lifecycle)
+	}
 	path := os.Getenv("KAVORA_BACKEND_STATE_FILE")
 	if path == "" {
 		return controller, nil
@@ -309,6 +337,18 @@ func environmentPositiveInt(name string, fallback int) (int, error) {
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
 		return 0, errors.New(name + " must be a positive integer")
+	}
+	return parsed, nil
+}
+
+func environmentNonNegativeFloat(name string, fallback float64) (float64, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed < 0 {
+		return 0, errors.New(name + " must be a non-negative number")
 	}
 	return parsed, nil
 }

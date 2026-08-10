@@ -8,20 +8,41 @@ import (
 )
 
 type Candidate struct {
-	BackendID string
-	Score     float64
-	Reason    string
+	BackendID               string      `json:"backend_id"`
+	Eligible                bool        `json:"eligible"`
+	ExcludedBy              []string    `json:"excluded_by,omitempty"`
+	PrefixMatch             float64     `json:"prefix_match"`
+	MatchedTokens           int         `json:"matched_tokens"`
+	CacheSource             CacheSource `json:"cache_source"`
+	CacheQuality            Quality     `json:"cache_quality"`
+	CacheConfidence         float64     `json:"cache_confidence"`
+	QueueDepth              float64     `json:"queue_depth"`
+	KVPressure              float64     `json:"kv_pressure"`
+	RecentPrefillRate       float64     `json:"recent_prefill_tokens_per_second"`
+	PredictedTTFTMS         float64     `json:"predicted_ttft_ms"`
+	SLOViolationProbability float64     `json:"slo_violation_probability"`
+	StateConfidence         float64     `json:"state_confidence"`
+	Score                   float64     `json:"score"`
+	Reason                  string      `json:"reason"`
 }
 
 type Decision struct {
-	RequestID  string
-	TenantID   string
-	Selected   string
-	Mode       string
-	Fallback   bool
-	Reason     string
-	Candidates []Candidate
-	OccurredAt time.Time
+	RequestID      string            `json:"request_id"`
+	TenantID       string            `json:"tenant_id"`
+	CacheKey       string            `json:"cache_key,omitempty"`
+	PolicyVersion  string            `json:"policy_version"`
+	Mode           string            `json:"mode"`
+	Stage          string            `json:"stage,omitempty"`
+	Enforced       bool              `json:"enforced"`
+	CanaryFraction float64           `json:"canary_fraction"`
+	Requirements   map[string]string `json:"requirements,omitempty"`
+	Selected       string            `json:"selected"`
+	ActualSelected string            `json:"actual_selected,omitempty"`
+	Fallback       bool              `json:"fallback"`
+	Reason         string            `json:"reason"`
+	Reasons        []string          `json:"reasons,omitempty"`
+	Candidates     []Candidate       `json:"candidates"`
+	OccurredAt     time.Time         `json:"occurred_at"`
 }
 
 type Evaluator struct {
@@ -40,7 +61,7 @@ func (e Evaluator) Shadow(requestID, tenantID string, states map[string]backends
 			decision.Candidates = append(decision.Candidates, Candidate{BackendID: id, Reason: "missing_or_stale_cold_free"})
 			continue
 		}
-		decision.Candidates = append(decision.Candidates, Candidate{BackendID: id, Score: 1 - score, Reason: "cold_free_inverse"})
+		decision.Candidates = append(decision.Candidates, Candidate{BackendID: id, Eligible: true, Score: 1 - score, Reason: "cold_free_inverse"})
 	}
 	sortCandidates(decision.Candidates)
 	if len(decision.Candidates) > 0 && decision.Candidates[0].Reason == "cold_free_inverse" {
@@ -63,7 +84,7 @@ func (e Evaluator) LoadAware(requestID, tenantID string, states map[string]backe
 			decision.Candidates = append(decision.Candidates, Candidate{BackendID: id, Reason: "missing_or_stale_queue_depth"})
 			continue
 		}
-		decision.Candidates = append(decision.Candidates, Candidate{BackendID: id, Score: -queueDepth, Reason: "queue_depth_inverse"})
+		decision.Candidates = append(decision.Candidates, Candidate{BackendID: id, Eligible: true, Score: -queueDepth, Reason: "queue_depth_inverse"})
 	}
 	sortCandidates(decision.Candidates)
 	if len(decision.Candidates) > 0 && decision.Candidates[0].Reason == "queue_depth_inverse" {
@@ -76,6 +97,9 @@ func (e Evaluator) LoadAware(requestID, tenantID string, states map[string]backe
 
 func sortCandidates(candidates []Candidate) {
 	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Eligible != candidates[j].Eligible {
+			return candidates[i].Eligible
+		}
 		if candidates[i].Score == candidates[j].Score {
 			return candidates[i].BackendID < candidates[j].BackendID
 		}

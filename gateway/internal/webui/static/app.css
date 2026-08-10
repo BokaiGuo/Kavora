@@ -24,7 +24,7 @@ body { margin: 0; min-width: 320px; background: radial-gradient(circle at 12% 8%
 .hero-stat i { color: #80bbae; font-style: normal; font-weight: 300; }
 .hero-stat span:last-child { font-size: 11px; color: #6f8992; }
 .workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.panel, .backend-panel { border: 1px solid #29464f; background: #0d1c22; }
+.panel, .backend-panel, .inspector-panel { border: 1px solid #29464f; background: #0d1c22; }
 .panel { padding: 27px; }
 .panel-head, .backend-title { display: flex; gap: 14px; align-items: flex-start; }
 .number { color: #70b09f; font-size: 11px; letter-spacing: .15em; padding-top: 4px; }
@@ -52,6 +52,20 @@ body { margin: 0; min-width: 320px; background: radial-gradient(circle at 12% 8%
 .empty p { color: #a2b6bc; }
 .response-foot { color: #63808a; font-size: 10px; letter-spacing: .12em; margin-top: 14px; }
 .backend-panel { margin-top: 14px; padding: 22px 27px; }
+.inspector-panel { margin-top: 14px; padding: 22px 27px; }
+.inspector-toolbar { display: flex; align-items: end; gap: 12px; margin-top: 16px; }
+.inspector-toolbar label { flex: 1; color: #78929a; font-size: 10px; letter-spacing: .16em; }
+.inspector-toolbar input { width: 100%; display: block; margin-top: 8px; border: 1px solid #29464f; background: #0a171c; color: #e0edf0; padding: 9px 11px; }
+.inspector-toolbar button { border: 1px solid #39715f; background: transparent; color: #9be2c6; padding: 10px 13px; cursor: pointer; }
+.decision-inspector { margin-top: 16px; color: #8ca4ab; font-size: 12px; }
+.decision-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.decision-summary span { border: 1px solid #29464f; background: #0a171c; padding: 8px 10px; color: #64818a; font-size: 9px; letter-spacing: .1em; }
+.decision-summary strong { color: #c1d9da; margin-left: 5px; }
+.decision-table-wrap { overflow-x: auto; }
+.decision-inspector table { width: 100%; border-collapse: collapse; min-width: 900px; }
+.decision-inspector th, .decision-inspector td { border-bottom: 1px solid #213b43; padding: 9px; text-align: left; font-size: 10px; }
+.decision-inspector th { color: #70b09f; letter-spacing: .08em; }
+.decision-inspector tr.excluded { opacity: .48; }
 .backend-title h2 { font-size: 15px; }
 .backend-title > span:last-child { margin-left: auto; color: #80bbae; font-size: 9px; letter-spacing: .16em; }
 .backend-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; margin-top: 17px; }

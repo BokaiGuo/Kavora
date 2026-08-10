@@ -4,6 +4,9 @@ tenants:
     max_concurrent: 4
     token_budget: 8192
     policy_fail_mode: closed
+    ttft_slo_ms: 200
+    routing_requirements:
+      trust_zone: local
 
 backends:
   - id: sglang-local
@@ -12,3 +15,7 @@ backends:
     weight: 1
     models: [kvcache-local-tiny]
     health_path: /health
+    attributes:
+      trust_zone: local
+      local_only: "true"
+      accelerator: cuda

@@ -132,3 +132,4 @@
 | M5 | enforced routing + 可解释决策 | 达到长期可用状态 |
 | M6 | 可复现实验矩阵 | 达到研究实验目标 |
 | M7 | Rust WASM Agent Runtime | 完成 Agent 扩展 |
+| M8 | Evidence-aware routing + decision ledger | 将缓存证据、硬约束、SLO 和生命周期统一为可解释控制平面 |

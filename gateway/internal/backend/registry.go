@@ -15,12 +15,13 @@ import (
 )
 
 type Config struct {
-	ID         string   `yaml:"id" json:"id"`
-	URL        string   `yaml:"url" json:"url"`
-	Enabled    *bool    `yaml:"enabled" json:"enabled"`
-	Weight     int      `yaml:"weight" json:"weight"`
-	Models     []string `yaml:"models" json:"models"`
-	HealthPath string   `yaml:"health_path" json:"health_path"`
+	ID         string            `yaml:"id" json:"id"`
+	URL        string            `yaml:"url" json:"url"`
+	Enabled    *bool             `yaml:"enabled" json:"enabled"`
+	Weight     int               `yaml:"weight" json:"weight"`
+	Models     []string          `yaml:"models" json:"models"`
+	HealthPath string            `yaml:"health_path" json:"health_path"`
+	Attributes map[string]string `yaml:"attributes" json:"attributes"`
 }
 
 type Backend struct {
@@ -29,16 +30,18 @@ type Backend struct {
 	Weight     int
 	Models     map[string]struct{}
 	HealthPath string
+	Attributes map[string]string
 }
 
 type Status struct {
-	ID         string   `json:"id"`
-	URL        string   `json:"url"`
-	Enabled    bool     `json:"enabled"`
-	Healthy    bool     `json:"healthy"`
-	Weight     int      `json:"weight"`
-	Models     []string `json:"models"`
-	HealthPath string   `json:"health_path"`
+	ID         string            `json:"id"`
+	URL        string            `json:"url"`
+	Enabled    bool              `json:"enabled"`
+	Healthy    bool              `json:"healthy"`
+	Weight     int               `json:"weight"`
+	Models     []string          `json:"models"`
+	HealthPath string            `json:"health_path"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
 type Registry struct {
@@ -115,7 +118,15 @@ func normalize(config Config) (Backend, error) {
 	if healthPath == "" {
 		healthPath = "/healthz"
 	}
-	return Backend{ID: config.ID, URL: parsed, Weight: config.Weight, Models: models, HealthPath: healthPath}, nil
+	attributes := make(map[string]string, len(config.Attributes))
+	for key, value := range config.Attributes {
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if key == "" || value == "" {
+			return Backend{}, errors.New("attributes must not contain empty keys or values")
+		}
+		attributes[key] = value
+	}
+	return Backend{ID: config.ID, URL: parsed, Weight: config.Weight, Models: models, HealthPath: healthPath, Attributes: attributes}, nil
 }
 
 func (registry *Registry) Candidates(model string) []Backend {
@@ -205,11 +216,22 @@ func (registry *Registry) Snapshot() []Status {
 		statuses = append(statuses, Status{
 			ID: current.backend.ID, URL: current.backend.URL.String(), Enabled: current.enabled,
 			Healthy: current.healthy, Weight: current.backend.Weight, Models: models,
-			HealthPath: current.backend.HealthPath,
+			HealthPath: current.backend.HealthPath, Attributes: cloneAttributes(current.backend.Attributes),
 		})
 	}
 	sort.Slice(statuses, func(left, right int) bool { return statuses[left].ID < statuses[right].ID })
 	return statuses
+}
+
+func cloneAttributes(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make(map[string]string, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
 }
 
 func (registry *Registry) CheckHealth(ctx context.Context, client *http.Client) error {
