@@ -122,6 +122,15 @@
 
 ## 4) 窗口指标质量状态
 
+### 在线负载信号
+
+Observer 还将后端负载规范化为可缺失信号：
+
+- `queue_depth`：vLLM 优先读取 `vllm:num_requests_waiting`；SGLang 读取兼容的 queue gauge
+- `running_requests`：当前正在执行的请求数
+
+对应 exporter 指标为 `kvcache_backend_queue_depth` 和 `kvcache_backend_running_requests`。原始后端未暴露这些 gauge 时，backend-state 将其标为 `missing`，load-aware 路由必须静态回退，不能把缺失解释成零队列。
+
 窗口命中率除了数值本身，还有质量状态：
 
 - `metric_quality = ok`

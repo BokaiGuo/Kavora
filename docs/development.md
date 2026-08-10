@@ -209,6 +209,8 @@ Go Gateway 会将 `request_id` 作为响应头、Policy protobuf context、后�
 
 后端健康检查周期可用 `KAVORA_BACKEND_HEALTH_INTERVAL` 调整；审计事件默认输出到 Gateway stderr，便于被 systemd、容器 runtime 或日志采集器接收。
 
+Stage 2 在线状态可通过 `KAVORA_BACKEND_STATE_URLS` 配置多个 Observer `/backend-state` 地址（空格或逗号分隔），轮询周期由 `KAVORA_BACKEND_STATE_POLL_INTERVAL` 控制，默认 `2s`。单个 Observer 暂时不可用时，Gateway 保留最后一次有效状态；超过 `KAVORA_BACKEND_STATE_MAX_AGE`（默认 `10s`）后，fresh signal 会在决策时降为 stale 并触发静态回退。
+
 真实后端冒烟入口见 `docs/quickstart_gateway.md`。CI 默认继续使用 fake backend；没有 GPU、模型或对应服务时，`make smoke-vllm` / `make smoke-sglang` 会输出显式 `SKIP`，只有设置 `KAVORA_SMOKE_REQUIRED=true` 才会把环境缺失升级为失败。
 
 运行真实 Go↔Rust 端到端测试：

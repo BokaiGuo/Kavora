@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -116,6 +118,9 @@ func run() error {
 	}
 	shutdownContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
+	if stateURLs := backendStateURLs(os.Getenv("KAVORA_BACKEND_STATE_URLS")); len(stateURLs) > 0 {
+		go runBackendStatePolling(shutdownContext, kvRouter, stateURLs)
+	}
 	if backends != nil {
 		go runBackendHealthChecks(shutdownContext, backends)
 	}
@@ -136,9 +141,97 @@ func run() error {
 	return err
 }
 
+func backendStateURLs(raw string) []string {
+	fields := strings.FieldsFunc(raw, func(character rune) bool {
+		return character == ',' || character == ' ' || character == '\t' || character == '\n'
+	})
+	urls := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if value := strings.TrimSpace(field); value != "" {
+			urls = append(urls, value)
+		}
+	}
+	return urls
+}
+
+func pollBackendStateOnce(ctx context.Context, client *http.Client, controller *router.Controller, urls []string) error {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	var failures []error
+	for _, stateURL := range urls {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, stateURL, nil)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("backend state %s: %w", stateURL, err))
+			continue
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("backend state %s: %w", stateURL, err))
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		_ = response.Body.Close()
+		if readErr != nil {
+			failures = append(failures, fmt.Errorf("backend state %s: %w", stateURL, readErr))
+			continue
+		}
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			failures = append(failures, fmt.Errorf("backend state %s: HTTP %d", stateURL, response.StatusCode))
+			continue
+		}
+		var snapshots []backendstate.Snapshot
+		if err := json.Unmarshal(body, &snapshots); err != nil {
+			var snapshot backendstate.Snapshot
+			if singleErr := json.Unmarshal(body, &snapshot); singleErr != nil {
+				failures = append(failures, fmt.Errorf("backend state %s: decode: %w", stateURL, err))
+				continue
+			}
+			snapshots = []backendstate.Snapshot{snapshot}
+		}
+		for _, snapshot := range snapshots {
+			if err := controller.SetState(snapshot); err != nil {
+				failures = append(failures, fmt.Errorf("backend state %s: %w", stateURL, err))
+			}
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func runBackendStatePolling(ctx context.Context, controller *router.Controller, urls []string) {
+	interval := 2 * time.Second
+	if value := os.Getenv("KAVORA_BACKEND_STATE_POLL_INTERVAL"); value != "" {
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			interval = parsed
+		}
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	poll := func() {
+		if err := pollBackendStateOnce(ctx, client, controller, urls); err != nil && ctx.Err() == nil {
+			log.Printf("backend state poll: %v", err)
+		}
+	}
+	poll()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			poll()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func loadRouter() (*router.Controller, error) {
 	mode := router.Mode(os.Getenv("KAVORA_ROUTING_MODE"))
 	controller := router.NewController(mode, router.NewAffinity(4096, 5*time.Minute))
+	maxStateAge, err := environmentDuration("KAVORA_BACKEND_STATE_MAX_AGE", 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	controller.SetMaxStateAge(maxStateAge)
 	path := os.Getenv("KAVORA_BACKEND_STATE_FILE")
 	if path == "" {
 		return controller, nil

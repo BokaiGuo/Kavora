@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- Added a real-backend Stage 2 evaluation runner with four controlled workloads, at least ten repetitions, confidence intervals, per-request routing evidence, vLLM metric windows, and raw JSON/Markdown artifacts.
+- Added a two-replica vLLM launcher and a versioned Stage 2 configuration template.
+
+### Changed
+
+- `make benchmark-stage2` now requires explicit real endpoints and no longer emits synthetic proxy performance rows.
+- Gateway responses now expose the selected backend and routing fallback metadata; shadow mode reports recommendations without reordering traffic.
+
 ### Fixed
 
 - Fixed isolated serving-stack restarts so the old backend must really exit before the next backend/exporter startup continues.

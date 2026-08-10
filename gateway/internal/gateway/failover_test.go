@@ -9,6 +9,7 @@ import (
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/backend"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/fakebackend"
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/gateway"
+	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/router"
 )
 
 func TestNonStreamFailoverBeforeResponse(t *testing.T) {
@@ -35,6 +36,9 @@ func TestNonStreamFailoverBeforeResponse(t *testing.T) {
 	if working.StartedRequests() != 1 {
 		t.Fatalf("working backend requests = %d", working.StartedRequests())
 	}
+	if got := response.Header.Get("X-Kavora-Backend"); got != "b-working" {
+		t.Fatalf("X-Kavora-Backend = %q, want b-working", got)
+	}
 }
 
 func TestStreamFailoverBeforeFirstResponse(t *testing.T) {
@@ -60,6 +64,31 @@ func TestStreamFailoverBeforeFirstResponse(t *testing.T) {
 	}
 	if working.StartedRequests() != 1 {
 		t.Fatalf("working backend requests = %d", working.StartedRequests())
+	}
+}
+
+func TestEnforcedRoutingReportsStaticFallback(t *testing.T) {
+	working := fakebackend.New(fakebackend.Config{ResponseChunks: []string{"fallback"}})
+	workingServer := httptest.NewServer(working)
+	defer workingServer.Close()
+	registry, err := backend.New([]backend.Config{{ID: "gpu-0", URL: workingServer.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := gateway.New(gateway.Config{
+		Backends: registry, Policy: &recordingPolicy{result: allowResult()}, Router: router.NewController(router.ModeEnforced, nil),
+		RequestTimeout: time.Second, MaxRequestBytes: 1 << 20, MaxResponseBytes: 1 << 20, TokenBudget: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := postChat(t, server, `{"model":"demo-model","messages":[{"role":"user","content":"hello"}]}`)
+	defer response.Body.Close()
+	if got := response.Header.Get("X-Kavora-Routing-Mode"); got != "enforced" {
+		t.Fatalf("X-Kavora-Routing-Mode = %q, want enforced", got)
+	}
+	if got := response.Header.Get("X-Kavora-Routing-Fallback"); got != "true" {
+		t.Fatalf("X-Kavora-Routing-Fallback = %q, want true", got)
 	}
 }
 

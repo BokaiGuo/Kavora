@@ -5,9 +5,10 @@ import "time"
 type Mode string
 
 const (
-	ModeStatic   Mode = "static"
-	ModeShadow   Mode = "shadow"
-	ModeEnforced Mode = "enforced"
+	ModeStatic    Mode = "static"
+	ModeLoadAware Mode = "load-aware"
+	ModeShadow    Mode = "shadow"
+	ModeEnforced  Mode = "enforced"
 )
 
 type Guardrails struct {

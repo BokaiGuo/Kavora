@@ -62,6 +62,12 @@ class VllmAdapter:
                     return float(m[k])
             return default
 
+        def _pick_optional(*keys: str) -> float | None:
+            for key in keys:
+                if key in m:
+                    return float(m[key])
+            return None
+
         prefix_hits, prefix_hits_metric_name = _pick_metric_with_name(
             m, "vllm:prefix_cache_hits_total", "vllm:prefix_cache_hits"
         )
@@ -90,5 +96,7 @@ class VllmAdapter:
             prefix_metric_semantics=prefix_metric_semantics,
             prefix_metric_comparability=prefix_metric_comparability,
             prefix_metric_basis=prefix_metric_basis,
+            queue_depth=_pick_optional("vllm:num_requests_waiting"),
+            running_requests=_pick_optional("vllm:num_requests_running"),
             extra=m,
         )

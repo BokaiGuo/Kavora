@@ -61,3 +61,26 @@ def test_orchestration_scripts_export_stable_launch_parameters() -> None:
     assert 'ISOLATE_EXPERIMENT_STACK="${ISOLATE_EXPERIMENT_STACK:-1}"' in template
     assert 'ISOLATE_CAPACITY_SWEEP_POINTS="${ISOLATE_CAPACITY_SWEEP_POINTS:-1}"' in template
     assert "--restart-stack-before-each-point" in template
+
+
+def test_stage2_benchmark_requires_real_config_and_pair_launcher() -> None:
+    benchmark = (ROOT / "scripts/benchmark_stage2.sh").read_text(encoding="utf-8")
+    launcher = (ROOT / "scripts/launch_stage2_vllm_pair.sh").read_text(encoding="utf-8")
+
+    assert "config.stage2.template.yaml" in benchmark
+    assert "benchmark.stage2_evaluation" in benchmark
+    assert "kvaware_experiment.py" not in benchmark
+    assert 'PORT_A="${PORT_A:-18080}"' in launcher
+    assert 'PORT_B="${PORT_B:-18081}"' in launcher
+    assert "--enable-prefix-caching" in launcher
+
+
+def test_stage2_local_stack_wires_distinct_strategy_modes() -> None:
+    stack = (ROOT / "scripts/stage2_local_stack.sh").read_text(encoding="utf-8")
+
+    assert "gateway-static static" in stack
+    assert "gateway-load load-aware" in stack
+    assert "gateway-shadow shadow" in stack
+    assert "gateway-enforced enforced" in stack
+    assert "KAVORA_BACKEND_STATE_URLS" in stack
+    assert "make benchmark-stage2" in stack

@@ -18,6 +18,8 @@ def _snapshot(*, cache_hit_ratio: float | None) -> DerivedSnapshot:
         effective_residency_perc=0.5,
         cold_free_perc=0.5,
         cache_hit_ratio=cache_hit_ratio,
+        queue_depth=3.0,
+        running_requests=2.0,
     )
 
 
@@ -27,6 +29,8 @@ def test_prom_writer_removes_optional_hit_ratio_metric_when_missing() -> None:
     writer.write(_snapshot(cache_hit_ratio=0.5))
     payload = writer.render().decode("utf-8")
     assert "kvcache_kv_cache_hit_ratio 0.5" in payload
+    assert "kvcache_backend_queue_depth 3.0" in payload
+    assert "kvcache_backend_running_requests 2.0" in payload
 
     writer.write(_snapshot(cache_hit_ratio=None))
     payload = writer.render().decode("utf-8")

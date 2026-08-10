@@ -25,7 +25,7 @@
 - [x] Task 14: Implement shadow evaluation
 - [x] Task 15: Add bounded prefix affinity
 - [x] Task 16: Add routing safety controls
-- [x] Task 17: Run experiment matrix (proxy matrix; real enforcement not promoted)
+- [ ] Task 17: Run reproducible real-backend experiment matrix (runner complete; real artifact pending)
 - [x] Stage 2 promotion gate (safe substrate passed; enforced mode remains no-go)
 
 ## Stage 3: Secure Agent Runtime

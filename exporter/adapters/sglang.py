@@ -26,6 +26,13 @@ def _pick_metric(metrics: dict[str, float], candidates: list[str], default: floa
     return default
 
 
+def _pick_metric_optional(metrics: dict[str, float], candidates: list[str]) -> float | None:
+    for name in candidates:
+        if name in metrics:
+            return float(metrics[name])
+    return None
+
+
 def _pick_metric_with_name(metrics: dict[str, float], candidates: list[str], default: float = 0.0) -> tuple[float, str]:
     for name in candidates:
         if name in metrics:
@@ -143,5 +150,11 @@ class SGLangAdapter:
             prefix_metric_semantics=prefix_metric_semantics,
             prefix_metric_comparability=prefix_metric_comparability,
             prefix_metric_basis=prefix_metric_basis,
+            queue_depth=_pick_metric_optional(
+                m, ["sglang:num_queue_reqs", "sglang_num_queue_reqs", "sglang:num_requests_waiting"]
+            ),
+            running_requests=_pick_metric_optional(
+                m, ["sglang:num_running_reqs", "sglang_num_running_reqs", "sglang:num_requests_running"]
+            ),
             extra=m,
         )

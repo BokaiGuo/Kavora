@@ -1,0 +1,39 @@
+model: qwen-local
+model_revision: replace-with-model-revision-or-snapshot-sha
+backend_version: replace-with-vllm-version
+repetitions: 10
+requests_per_repetition: 24
+concurrency: 2
+timeout_s: 120
+max_tokens: 32
+seed: 7
+
+workloads:
+  - random
+  - repeated-system
+  - long-shared-prefix
+  - tenant-affinity
+
+# Each strategy must be a separately configured endpoint so measurements do not
+# silently relabel one Gateway process as multiple policies.
+targets:
+  - strategy: direct
+    url: http://127.0.0.1:18080
+  - strategy: static
+    url: http://127.0.0.1:18100
+    api_key_env: KAVORA_API_KEY
+  - strategy: load-aware
+    url: http://127.0.0.1:18101
+    api_key_env: KAVORA_API_KEY
+  - strategy: kv-aware-shadow
+    url: http://127.0.0.1:18102
+    api_key_env: KAVORA_API_KEY
+  - strategy: kv-aware-enforced
+    url: http://127.0.0.1:18103
+    api_key_env: KAVORA_API_KEY
+
+backends:
+  - id: gpu-0
+    metrics_url: http://127.0.0.1:18080/metrics
+  - id: gpu-1
+    metrics_url: http://127.0.0.1:18081/metrics

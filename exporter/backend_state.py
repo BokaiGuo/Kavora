@@ -56,6 +56,8 @@ def snapshot_from_derived(
         "effective_residency_perc": _signal(snap.effective_residency_perc, source="derived.effective_residency_perc", observed_at_unix_millis=observed, semantics="ratio", stale=stale),
         "cold_free_perc": _signal(snap.cold_free_perc, source="derived.cold_free_perc", observed_at_unix_millis=observed, semantics="ratio", stale=stale),
         "cache_hit_ratio": _signal(snap.cache_hit_ratio, source=prefix_source, observed_at_unix_millis=observed, semantics=snap.prefix_metric_semantics, stale=stale),
+        "queue_depth": _signal(snap.queue_depth, source="backend.queue_depth", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
+        "running_requests": _signal(snap.running_requests, source="backend.running_requests", observed_at_unix_millis=observed, semantics="gauge", stale=stale),
     }
     body = {
         "schema_version": SCHEMA_VERSION,

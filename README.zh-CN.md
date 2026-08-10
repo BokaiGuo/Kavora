@@ -171,17 +171,26 @@ results/kavora-state/advice.jsonl
 
 ```bash
 make benchmark-stage1
-make benchmark-stage2
 ```
 
-真实后端矩阵：
+Stage 2 只接受真实端点配置，不再生成 synthetic proxy 成绩：
 
 ```bash
-KAVORA_API_KEY=local-real-key \
-KAVORA_STAGE2_MODEL=kvcache-local-real \
-KAVORA_STAGE2_REAL_PATHS='direct=http://127.0.0.1:18080 gateway=http://127.0.0.1:18000 gateway_stream=http://127.0.0.1:18000' \
+cp benchmark/config.stage2.template.yaml benchmark/config.stage2.yaml
+# 修改模型及 revision、后端版本、五个策略端点和两个 metrics 端点。
+make benchmark-stage2-config
 make benchmark-stage2
 ```
+
+矩阵固定包含 `direct`、`static`、`load-aware`、`kv-aware-shadow`、`kv-aware-enforced`，四类 workload 和至少十轮重复。详见 [`docs/stage2_results.md`](docs/stage2_results.md)。
+
+如果本地模型可以在当前 GPU 上同时放下两个副本，可一条命令启动完整实验栈并运行评测：
+
+```bash
+MODEL=/absolute/path/to/local-model make stage2-local
+```
+
+该命令会启动两个 vLLM、两个 Observer、一个 Rust Policy Engine 和四个独立策略 Gateway，并在结束后自动清理。
 
 生成论文式报告：
 

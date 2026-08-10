@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/BokaiGuo-Lincoln/kavora/gateway/internal/backend"
@@ -231,7 +232,11 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	server.forward(writer, ctx, rawBody, policyRequest, requestID, stream)
+	cacheKey := policyRequest.Request.Model
+	if result != nil && len(result.CacheKey) > 0 {
+		cacheKey = hex.EncodeToString(result.CacheKey)
+	}
+	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant.ID, cacheKey, stream)
 }
 
 func metricsOrDefault(metrics *telemetry.Metrics) *telemetry.Metrics {
@@ -365,6 +370,8 @@ func (server *Server) forward(
 	body []byte,
 	policyRequest *policyv1.EvaluateRequestRequest,
 	requestID string,
+	tenantID string,
+	cacheKey string,
 	stream bool,
 ) {
 	var flusher http.Flusher
@@ -398,7 +405,12 @@ func (server *Server) forward(
 		}
 	}
 
-	candidates := server.backendCandidates(policyRequest.Request.Model)
+	candidates, routingDecision := server.backendCandidates(requestID, tenantID, cacheKey, policyRequest.Request.Model)
+	writer.Header().Set("X-Kavora-Routing-Mode", routingDecision.Mode)
+	writer.Header().Set("X-Kavora-Routing-Fallback", strconv.FormatBool(routingDecision.Fallback))
+	if routingDecision.Selected != "" {
+		writer.Header().Set("X-Kavora-Routing-Suggested", routingDecision.Selected)
+	}
 	if len(candidates) == 0 {
 		writeGatewayError(writer, http.StatusServiceUnavailable, "BACKEND_UNAVAILABLE", "no healthy backend supports the requested model", requestID)
 		return
@@ -436,6 +448,7 @@ func (server *Server) forward(
 			server.backends.MarkSuccess(candidate.ID)
 		}
 		server.metrics.IncBackend(candidate.ID, "success")
+		writer.Header().Set("X-Kavora-Backend", candidate.ID)
 		if stream {
 			server.forwardStream(writer, response, flusher, streamSession, requestID, policyRequest.Context.FailMode)
 		} else {
@@ -447,7 +460,7 @@ func (server *Server) forward(
 	writeGatewayError(writer, http.StatusBadGateway, "BACKEND_UNAVAILABLE", "all candidate backends failed before response", requestID)
 }
 
-func (server *Server) backendCandidates(model string) []backend.Backend {
+func (server *Server) backendCandidates(requestID, tenantID, cacheKey, model string) ([]backend.Backend, router.Decision) {
 	var candidates []backend.Backend
 	if server.backends != nil {
 		candidates = server.backends.Candidates(model)
@@ -455,11 +468,12 @@ func (server *Server) backendCandidates(model string) []backend.Backend {
 		candidates = []backend.Backend{{ID: "default", URL: server.backendURL}}
 	}
 	if server.router == nil {
-		return candidates
+		return candidates, router.Decision{RequestID: requestID, TenantID: tenantID, Mode: string(router.ModeStatic), Reason: "static_round_robin"}
 	}
-	preferred := server.router.PreferredIDs("", defaultTenantID, model)
+	decision := server.router.Decide(requestID, tenantID, cacheKey)
+	preferred := server.router.PreferredIDs(requestID, tenantID, cacheKey)
 	if len(preferred) == 0 {
-		return candidates
+		return candidates, decision
 	}
 	ordered := make([]backend.Backend, 0, len(candidates))
 	used := map[string]bool{}
@@ -476,7 +490,7 @@ func (server *Server) backendCandidates(model string) []backend.Backend {
 			ordered = append(ordered, candidate)
 		}
 	}
-	return ordered
+	return ordered, decision
 }
 
 func (server *Server) forwardStream(

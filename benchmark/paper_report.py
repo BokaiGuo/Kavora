@@ -26,7 +26,7 @@ def build_report(stage1: dict, stage2: dict) -> dict:
         "stage1_config_hash": stage1.get("config_hash", "unknown"),
         "stage2_config_hash": stage2.get("config_hash", "unknown"),
         "stage2_status": stage2.get("status", "unknown"),
-        "seed": stage2.get("config", {}).get("seed", 42),
+        "seed": stage2.get("manifest", {}).get("seed", stage2.get("config", {}).get("seed", 42)),
     }
     encoded = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
     report = {
@@ -43,8 +43,8 @@ def build_report(stage1: dict, stage2: dict) -> dict:
         "stage1": stage1,
         "stage2": stage2,
         "limitations": [
-            "The current real matrix uses one local vLLM instance and multiple backend identities; it validates control-plane behavior, not independent-replica scaling.",
-            "KV-aware performance improvement is not claimed without repeated independent backends and matched workloads.",
+            "A configured endpoint label is not evidence by itself; the raw Stage 2 artifact and service manifest must be reviewed together.",
+            stage2.get("claim_boundary", "KV-aware performance improvement is not claimed without repeated independent backends and matched workloads."),
             "TTFT and latency are end-to-end measurements, not isolated Go/Rust CPU timings.",
         ],
     }
@@ -82,9 +82,20 @@ def markdown(report: dict) -> str:
         "| Path/strategy | Throughput req/s | TTFT p95 ms | p99 ms | Error rate |",
         "|---|---:|---:|---:|---:|",
     ]
-    for row in stage2.get("rows", []):
-        def fmt(value): return "n/a" if value is None else f"{value:.3f}"
-        lines.append(f"| `{row['strategy']}` | {fmt(row['throughput_req_s'])} | {fmt(row['ttft_p95_ms'])} | {fmt(row['tail_latency_p99_ms'])} | {fmt(row['error_rate'])} |")
+    def fmt(value): return "n/a" if value is None else f"{value:.3f}"
+    if stage2.get("results"):
+        for result in stage2["results"]:
+            aggregate = result["aggregate"]
+            lines.append(
+                f"| `{result['strategy']} / {result['workload']}` | "
+                f"{fmt(aggregate['throughput_req_s']['mean'])} | "
+                f"{fmt(aggregate['ttft_p95_ms']['mean'])} | "
+                f"{fmt(aggregate['latency_p99_ms']['mean'])} | "
+                f"{fmt(aggregate['error_rate']['mean'])} |"
+            )
+    else:
+        for row in stage2.get("rows", []):
+            lines.append(f"| `{row['strategy']}` | {fmt(row['throughput_req_s'])} | {fmt(row['ttft_p95_ms'])} | {fmt(row['tail_latency_p99_ms'])} | {fmt(row['error_rate'])} |")
     lines += ["", "## Interpretation", "", "The experiment validates the end-to-end path and the enforced controller's safety behavior. It does not establish a causal performance advantage for KV-aware routing.", "", "## Limitations", ""]
     lines.extend(f"- {item}" for item in report["limitations"])
     lines.append("")

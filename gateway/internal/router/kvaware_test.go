@@ -7,7 +7,15 @@ import (
 )
 
 func state(id string, cold float64, quality string) backendstate.Snapshot {
-	return backendstate.Snapshot{SchemaVersion: backendstate.SchemaVersion, BackendID: id, Backend: "vllm", Model: "m", ObservedAtUnixMillis: 1, Signals: map[string]backendstate.Signal{"cold_free_perc": {Value: cold, HasValue: quality != "missing", Quality: quality, Source: "test", ObservedAtUnixMillis: 1}}}
+	return backendstate.Snapshot{SchemaVersion: backendstate.SchemaVersion, BackendID: id, Backend: "vllm", Model: "m", ObservedAtUnixMillis: 1, Signals: map[string]backendstate.Signal{
+		"cold_free_perc": {Value: cold, HasValue: quality != "missing", Quality: quality, Source: "test", ObservedAtUnixMillis: 1},
+	}}
+}
+
+func stateWithQueue(id string, queue float64, quality string) backendstate.Snapshot {
+	snapshot := state(id, .5, "fresh")
+	snapshot.Signals["queue_depth"] = backendstate.Signal{Value: queue, HasValue: quality != "missing", Quality: quality, Source: "test", ObservedAtUnixMillis: 1}
+	return snapshot
 }
 func TestShadowFallsBackOnMissing(t *testing.T) {
 	d := (Evaluator{}).Shadow("r", "t", map[string]backendstate.Snapshot{"a": state("a", 0, "missing")})
@@ -18,6 +26,23 @@ func TestShadowFallsBackOnMissing(t *testing.T) {
 func TestShadowSelectsHighestResidency(t *testing.T) {
 	d := (Evaluator{}).Shadow("r", "t", map[string]backendstate.Snapshot{"a": state("a", .7, "fresh"), "b": state("b", .2, "fresh")})
 	if d.Selected != "b" || d.Fallback {
+		t.Fatalf("decision=%+v", d)
+	}
+}
+
+func TestLoadAwareSelectsLowestFreshQueue(t *testing.T) {
+	d := (Evaluator{}).LoadAware("r", "t", map[string]backendstate.Snapshot{
+		"a": stateWithQueue("a", 3, "fresh"),
+		"b": stateWithQueue("b", 1, "fresh"),
+	})
+	if d.Selected != "b" || d.Fallback || d.Reason != "lowest_queue_depth" {
+		t.Fatalf("decision=%+v", d)
+	}
+}
+
+func TestLoadAwareFallsBackWhenQueueStateIsStale(t *testing.T) {
+	d := (Evaluator{}).LoadAware("r", "t", map[string]backendstate.Snapshot{"a": stateWithQueue("a", 0, "stale")})
+	if !d.Fallback || d.Selected != "" {
 		t.Fatalf("decision=%+v", d)
 	}
 }

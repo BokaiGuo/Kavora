@@ -1,4 +1,4 @@
-from exporter.adapters.vllm import parse_prometheus_text
+from exporter.adapters.vllm import VllmAdapter, parse_prometheus_text
 from exporter.adapters.sglang import SGLangAdapter
 import asyncio
 
@@ -39,6 +39,20 @@ class _FakeAsyncClient:
         return _FakeResponse(text)
 
 
+class _FakeVllmAsyncClient(_FakeAsyncClient):
+    async def get(self, url: str) -> _FakeResponse:  # noqa: ARG002
+        return _FakeResponse(
+            """
+            # TYPE vllm:kv_cache_usage_perc gauge
+            vllm:kv_cache_usage_perc 0.5
+            # TYPE vllm:num_requests_waiting gauge
+            vllm:num_requests_waiting 3
+            # TYPE vllm:num_requests_running gauge
+            vllm:num_requests_running 2
+            """
+        )
+
+
 def test_parse_prometheus_text_basic() -> None:
     text = """
     # HELP demo demo
@@ -75,3 +89,12 @@ def test_sglang_adapter_supports_cached_token_metrics(monkeypatch) -> None:
     assert native.prefix_metric_semantics == "token_counter_fallback"
     assert native.prefix_metric_comparability == "directional"
     assert native.prefix_metric_basis == "tokens"
+
+
+def test_vllm_adapter_preserves_queue_signals(monkeypatch) -> None:
+    monkeypatch.setattr("exporter.adapters.vllm.httpx.AsyncClient", _FakeVllmAsyncClient)
+
+    native = asyncio.run(VllmAdapter(metrics_url="http://fake/metrics").collect())
+
+    assert native.queue_depth == 3.0
+    assert native.running_requests == 2.0

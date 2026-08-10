@@ -90,4 +90,6 @@ def compute_derived(
         prefix_metric_semantics=native.prefix_metric_semantics,
         prefix_metric_comparability=native.prefix_metric_comparability,
         prefix_metric_basis=native.prefix_metric_basis,
+        queue_depth=native.queue_depth,
+        running_requests=native.running_requests,
     )

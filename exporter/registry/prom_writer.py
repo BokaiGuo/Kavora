@@ -38,11 +38,13 @@ class PromWriter:
             ("kvcache_kv_effective_residency_perc", "Effective residency ratio"),
             ("kvcache_kv_cold_free_perc", "Cold free ratio"),
             ("kvcache_kv_cache_hit_ratio", "Prefix hit ratio"),
+            ("kvcache_backend_queue_depth", "Backend requests waiting in queue"),
+            ("kvcache_backend_running_requests", "Backend requests currently running"),
             ("kvcache_exporter_scrape_last_success_timestamp_seconds", "Unix time of last successful backend scrape"),
             ("kvcache_exporter_scrape_consecutive_failures", "Consecutive failed scrapes since last success"),
         ]
         self._gauge_help = {name: help_text for name, help_text in names}
-        self._optional_gauges = {"kvcache_kv_cache_hit_ratio"}
+        self._optional_gauges = {"kvcache_kv_cache_hit_ratio", "kvcache_backend_queue_depth", "kvcache_backend_running_requests"}
         self._gauges = {
             name: Gauge(name, help_text, registry=self.registry)
             for name, help_text in names
@@ -72,6 +74,8 @@ class PromWriter:
         self._gauges["kvcache_kv_effective_residency_perc"].set(snap.effective_residency_perc)
         self._gauges["kvcache_kv_cold_free_perc"].set(snap.cold_free_perc)
         self._set_optional_gauge("kvcache_kv_cache_hit_ratio", snap.cache_hit_ratio)
+        self._set_optional_gauge("kvcache_backend_queue_depth", snap.queue_depth)
+        self._set_optional_gauge("kvcache_backend_running_requests", snap.running_requests)
         self._prefix_metric_info.info(
             {
                 "backend": snap.backend or "unknown",

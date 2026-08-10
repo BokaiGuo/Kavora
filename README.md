@@ -189,20 +189,29 @@ make benchmark-stage1
 
 ### Stage 2 KV-aware matrix
 
-Proxy matrix:
+Create a real-endpoint config from the checked-in template:
+
+```bash
+cp benchmark/config.stage2.template.yaml benchmark/config.stage2.yaml
+# Edit model/revision, backend version, five target endpoints, and two metrics endpoints.
+make benchmark-stage2-config
+```
+
+Run the complete matrix:
 
 ```bash
 make benchmark-stage2
 ```
 
-Real backend matrix:
+The Stage 2 command intentionally refuses to invent proxy performance rows. It requires `direct`, `static`, `load-aware`, `kv-aware-shadow`, and `kv-aware-enforced` endpoints, at least two backend metrics endpoints, four controlled workloads, and at least ten repetitions. See [`docs/stage2_results.md`](docs/stage2_results.md).
+
+For a local model that fits as two replicas on the available GPU, run the complete stack and matrix with one command:
 
 ```bash
-KAVORA_API_KEY=local-real-key \
-KAVORA_STAGE2_MODEL=kvcache-local-real \
-KAVORA_STAGE2_REAL_PATHS='direct=http://127.0.0.1:18080 gateway=http://127.0.0.1:18000 gateway_stream=http://127.0.0.1:18000' \
-make benchmark-stage2
+MODEL=/absolute/path/to/local-model make stage2-local
 ```
+
+This starts two vLLM replicas, two Observers, one Rust Policy Engine, and four independently configured Gateway processes. It polls live queue/KV state during the run and tears the stack down afterward.
 
 ### Paper-style report
 
