@@ -19,3 +19,6 @@ backends:
       trust_zone: local
       local_only: "true"
       accelerator: cuda
+      gpu_type: replace-with-gpu-type
+      engine: sglang
+      engine_version: replace-with-sglang-version

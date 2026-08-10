@@ -50,3 +50,30 @@ func TestLifecycleRequiresHumanApprovalBeforeCanary(t *testing.T) {
 		t.Fatalf("snapshot=%+v", snapshot)
 	}
 }
+
+func TestLifecycleRollsBackOnPredictionOrEvidenceDrift(t *testing.T) {
+	lifecycle, err := NewLifecycle(LifecycleConfig{
+		Enabled:     true,
+		MinRequests: 10,
+		Gates: LifecycleGates{
+			MaxP95RegressionPercent: 5,
+			MaxErrorDelta:           .01,
+			MaxFallbackRate:         .02,
+			MaxSLOViolationRate:     .05,
+			MaxPredictionMAEMS:      25,
+			MaxEvidenceErrorRate:    .1,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := LifecycleObservation{Requests: 10, StateHealthy: true, PolicyHealthy: true, PredictionMAEMS: 10, EvidenceErrorRate: .05}
+	if snapshot := lifecycle.Observe(good); snapshot.Stage != StageCanary {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+	drifted := good
+	drifted.PredictionMAEMS = 40
+	if snapshot := lifecycle.Observe(drifted); snapshot.Stage != StageStatic || snapshot.LastReason != "prediction_or_evidence_drift" {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+}

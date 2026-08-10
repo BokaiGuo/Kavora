@@ -1,4 +1,4 @@
-.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate stage2-local demo-stage1 demo-kavora stage1-gate research-report
+.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor vllm-kv-events stage2-local demo-stage1 demo-kavora stage1-gate research-report
 
 GO ?= go
 CARGO ?= cargo
@@ -74,6 +74,14 @@ benchmark-fidelity:
 auto-calibrate:
 	@test -n "$(INPUT)" || (echo "usage: make auto-calibrate INPUT=results/.../summary.json"; exit 1)
 	$(PYTHON) -m planner.auto_calibrator --input "$(INPUT)" --out "$${OUT:-results/calibration/recommendation.json}" --report "$${REPORT:-results/calibration/recommendation.md}"
+
+fit-predictor:
+	@test -n "$(INPUT)" -a -n "$(MODEL)" -a -n "$(GPU_TYPE)" -a -n "$(BACKEND_ENGINE)" -a -n "$(BACKEND_VERSION)" || (echo "usage: make fit-predictor INPUT=results/state MODEL=... GPU_TYPE=... BACKEND_ENGINE=vllm BACKEND_VERSION=..."; exit 1)
+	$(PYTHON) -m planner.ttft_predictor --input "$(INPUT)" --out "$${OUT:-results/calibration/ttft-predictor.json}" --model "$(MODEL)" --gpu-type "$(GPU_TYPE)" --backend-engine "$(BACKEND_ENGINE)" --backend-version "$(BACKEND_VERSION)"
+
+vllm-kv-events:
+	@test -n "$(BACKEND_ID)" -a -n "$(GENERATION)" -a -n "$(ENDPOINT)" -a -n "$(REPLAY_ENDPOINT)" || (echo "usage: make vllm-kv-events BACKEND_ID=... GENERATION=... ENDPOINT=tcp://127.0.0.1:5557 REPLAY_ENDPOINT=tcp://127.0.0.1:5558"; exit 1)
+	$(PYTHON) -m engine_events.vllm --backend-id "$(BACKEND_ID)" --generation "$(GENERATION)" --endpoint "$(ENDPOINT)" --replay-endpoint "$(REPLAY_ENDPOINT)" $${GATEWAY_URL:+--gateway-url "$$GATEWAY_URL"}
 
 stage2-local:
 	bash scripts/stage2_local_stack.sh run

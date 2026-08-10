@@ -20,6 +20,7 @@ type Candidate struct {
 	QueueDepth              float64     `json:"queue_depth"`
 	KVPressure              float64     `json:"kv_pressure"`
 	RecentPrefillRate       float64     `json:"recent_prefill_tokens_per_second"`
+	PredictorVersion        string      `json:"predictor_version"`
 	PredictedTTFTMS         float64     `json:"predicted_ttft_ms"`
 	SLOViolationProbability float64     `json:"slo_violation_probability"`
 	StateConfidence         float64     `json:"state_confidence"`
@@ -28,22 +29,84 @@ type Candidate struct {
 }
 
 type Decision struct {
-	RequestID      string            `json:"request_id"`
-	TenantID       string            `json:"tenant_id"`
-	CacheKey       string            `json:"cache_key,omitempty"`
-	PolicyVersion  string            `json:"policy_version"`
-	Mode           string            `json:"mode"`
-	Stage          string            `json:"stage,omitempty"`
-	Enforced       bool              `json:"enforced"`
-	CanaryFraction float64           `json:"canary_fraction"`
-	Requirements   map[string]string `json:"requirements,omitempty"`
-	Selected       string            `json:"selected"`
-	ActualSelected string            `json:"actual_selected,omitempty"`
-	Fallback       bool              `json:"fallback"`
-	Reason         string            `json:"reason"`
-	Reasons        []string          `json:"reasons,omitempty"`
-	Candidates     []Candidate       `json:"candidates"`
-	OccurredAt     time.Time         `json:"occurred_at"`
+	RequestID        string            `json:"request_id"`
+	TenantID         string            `json:"tenant_id"`
+	CacheKey         string            `json:"cache_key,omitempty"`
+	PolicyVersion    string            `json:"policy_version"`
+	PredictorVersion string            `json:"predictor_version"`
+	Mode             string            `json:"mode"`
+	Stage            string            `json:"stage,omitempty"`
+	Enforced         bool              `json:"enforced"`
+	CanaryFraction   float64           `json:"canary_fraction"`
+	Requirements     map[string]string `json:"requirements,omitempty"`
+	Selected         string            `json:"selected"`
+	ActualSelected   string            `json:"actual_selected,omitempty"`
+	Fallback         bool              `json:"fallback"`
+	Reason           string            `json:"reason"`
+	Reasons          []string          `json:"reasons,omitempty"`
+	Candidates       []Candidate       `json:"candidates"`
+	OccurredAt       time.Time         `json:"occurred_at"`
+	Outcome          *DecisionOutcome  `json:"outcome,omitempty"`
+	PredictionError  *PredictionError  `json:"prediction_error,omitempty"`
+}
+
+type DecisionOutcome struct {
+	RequestID             string    `json:"request_id"`
+	ActualBackend         string    `json:"actual_backend"`
+	TTFTMS                float64   `json:"ttft_ms"`
+	E2EMS                 float64   `json:"e2e_ms"`
+	Success               bool      `json:"success"`
+	StatusCode            int       `json:"status_code"`
+	PromptTokens          int       `json:"prompt_tokens"`
+	OutputTokens          int       `json:"output_tokens"`
+	Model                 string    `json:"model,omitempty"`
+	GPUType               string    `json:"gpu_type,omitempty"`
+	BackendEngine         string    `json:"backend_engine,omitempty"`
+	BackendVersion        string    `json:"backend_version,omitempty"`
+	ObservedCacheHitRatio *float64  `json:"observed_cache_hit_ratio,omitempty"`
+	ObservedMatchedTokens *int      `json:"observed_matched_tokens,omitempty"`
+	CompletedAt           time.Time `json:"completed_at"`
+}
+
+type PredictionError struct {
+	PredictorVersion       string   `json:"predictor_version"`
+	PredictedTTFTMS        float64  `json:"predicted_ttft_ms"`
+	ActualTTFTMS           float64  `json:"actual_ttft_ms"`
+	TTFTSignedMS           float64  `json:"ttft_signed_error_ms"`
+	TTFTAbsoluteMS         float64  `json:"ttft_absolute_error_ms"`
+	PredictedCacheHitRatio *float64 `json:"predicted_cache_hit_ratio,omitempty"`
+	ActualCacheHitRatio    *float64 `json:"actual_cache_hit_ratio,omitempty"`
+	CacheHitAbsoluteError  *float64 `json:"cache_hit_absolute_error,omitempty"`
+	EvidenceQuality        string   `json:"evidence_quality"`
+}
+
+type SLOCalibrationBucket struct {
+	Bucket                    string  `json:"bucket"`
+	Samples                   int     `json:"samples"`
+	PredictedProbability      float64 `json:"predicted_probability"`
+	ActualViolationRate       float64 `json:"actual_violation_rate"`
+	PredictedProbabilityTotal float64 `json:"-"`
+	ActualViolations          int     `json:"-"`
+}
+
+type EvidenceQualityError struct {
+	EvidenceQuality    string  `json:"evidence_quality"`
+	Samples            int     `json:"samples"`
+	MAEMS              float64 `json:"mae_ms"`
+	CacheSamples       int     `json:"cache_samples"`
+	CacheHitMAE        float64 `json:"cache_hit_mae"`
+	AbsoluteErrorTotal float64 `json:"-"`
+	CacheErrorTotal    float64 `json:"-"`
+}
+
+type PredictionQuality struct {
+	Samples            int                    `json:"samples"`
+	MAEMS              float64                `json:"mae_ms"`
+	P95AbsoluteErrorMS float64                `json:"p95_absolute_error_ms"`
+	MeanSignedErrorMS  float64                `json:"mean_signed_error_ms"`
+	Status             string                 `json:"status"`
+	SLOCalibration     []SLOCalibrationBucket `json:"slo_calibration"`
+	Evidence           []EvidenceQualityError `json:"evidence_quality"`
 }
 
 type Evaluator struct {

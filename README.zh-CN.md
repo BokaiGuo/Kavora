@@ -10,7 +10,7 @@
 ![Go](https://img.shields.io/badge/Go-gateway-00ADD8?logo=go&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-policy%20%26%20runtime-000000?logo=rust&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-observability%20%26%20research-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/python%20tests-86%20passing-2ea44f)
+[![CI](https://github.com/BokaiGuo/Kavora/actions/workflows/ci.yml/badge.svg)](https://github.com/BokaiGuo/Kavora/actions/workflows/ci.yml)
 
 Kavora 将 Go 网关、Rust 策略与安全运行时，以及 Python 可观测与实验层组合成一个可运行的**证据感知 AI serving 控制平面**。它把缓存证据精度、状态新鲜度、租户硬约束与延迟目标转化为可检查的后端决策，而不是隐藏在单一启发式规则里。
 
@@ -77,9 +77,11 @@ flowchart LR
 - 带 digest、内存、实例、table、fuel、timeout 和 capability 限制的 Wasmtime worker。
 - 可复现 benchmark、replay、promotion gate 以及 JSON/Markdown 报告。
 - 指标语义对齐、SLO 自动阈值/并发校准，以及匿名 workload 的 canary 前回放。
+- 结果闭环：真实 TTFT/E2E/状态/token/cache outcome、prediction error、持久化 JSONL、可解释预测器拟合、漂移门禁、原生 vLLM KV-event 恢复和多策略回放。
 
 缓存证据契约、决策 API、生命周期配置与 fidelity/lag 消融见 [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md)。
 指标真值、自动校准、匿名回放、人工审批与回滚见 [`docs/stage5_self_tuning.md`](docs/stage5_self_tuning.md)。
+决策结果账本、预测器校准、原生 KV events、prediction quality 与 policy laboratory 见 [`docs/stage6_outcome_grounded_control.md`](docs/stage6_outcome_grounded_control.md)。
 
 ## 快速开始
 

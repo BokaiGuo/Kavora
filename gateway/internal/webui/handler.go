@@ -75,6 +75,18 @@ func NewWithControlPlane(gateway http.Handler, metrics *telemetry.Metrics, ready
 			}
 			writeJSON(writer, http.StatusOK, decision)
 		}))
+		mux.HandleFunc("/v1/admin/prediction-quality", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet {
+				http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			limit, _ := strconv.Atoi(request.URL.Query().Get("limit"))
+			sloMS, _ := strconv.ParseFloat(request.URL.Query().Get("slo_ms"), 64)
+			if sloMS <= 0 {
+				sloMS = 500
+			}
+			writeJSON(writer, http.StatusOK, controller.PredictionQuality(limit, sloMS))
+		}))
 		mux.HandleFunc("/v1/admin/lifecycle", admin(adminToken, func(writer http.ResponseWriter, request *http.Request) {
 			lifecycle := controller.Lifecycle()
 			if lifecycle == nil {
@@ -122,7 +134,11 @@ func NewWithControlPlane(gateway http.Handler, metrics *telemetry.Metrics, ready
 				http.Error(writer, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if event.BackendID == "" || event.CacheKey == "" || event.MatchedTokens < 0 || event.TotalTokens < 0 || (event.TotalTokens > 0 && event.MatchedTokens > event.TotalTokens) {
+			operation := event.Operation
+			if operation == "" {
+				operation = "store"
+			}
+			if event.BackendID == "" || (operation != "clear" && event.CacheKey == "") || (operation != "store" && operation != "remove" && operation != "clear") || event.MatchedTokens < 0 || event.TotalTokens < 0 || (event.TotalTokens > 0 && event.MatchedTokens > event.TotalTokens) {
 				http.Error(writer, "invalid cache event", http.StatusBadRequest)
 				return
 			}

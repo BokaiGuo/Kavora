@@ -14,6 +14,10 @@
 - `strict / estimated / fallback / missing` 后端证据语义对齐
 - SLO-aware `AutoCalibrator` 阈值与并发推荐
 - 匿名 workload signature replay 与人工 canary 审批门禁
+- Decision + Outcome Ledger、append-only JSONL 与重启恢复
+- outcome-grounded TTFT predictor 拟合、prediction calibration 与 drift gate
+- vLLM 原生 KV-event ZMQ subscriber、gap replay、dedupe 与 generation reset
+- 多策略 replay policy laboratory
 
 ---
 
@@ -25,7 +29,9 @@
 | P1 | 报告自动化生成 | 一次命令产出 markdown + 图 + 结论段落 |
 | P2 | CI 补充图表回归 | 检查脚本产物文件存在、字段完整、无空图 |
 | P1 | 真实 GPU Stage 2 artifact | 补齐硬件、模型和原始请求级证据，作为 v0.1.0 发布门禁 |
-| P2 | 原生引擎 KV-event transport | 将 exact provider 从管理 API ingestion 扩展到 vLLM/SGLang 原生事件流 |
+| P1 | vLLM request hash alignment | 将请求 cache key 与 vLLM external block hash 对齐，完成 native event 到 exact placement 的最后一跳 |
+| P2 | SGLang 原生事件 transport | 在 SGLang 提供稳定事件协议后接入相同 sequence/generation contract |
+| P2 | held-out predictor validation | 用独立真实 GPU 时间窗验证 predictor 泛化误差 |
 
 ---
 

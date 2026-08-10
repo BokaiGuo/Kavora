@@ -228,6 +228,9 @@ func loadRouter() (*router.Controller, error) {
 	mode := router.Mode(os.Getenv("KAVORA_ROUTING_MODE"))
 	affinity := router.NewAffinity(4096, 5*time.Minute)
 	controller := router.NewController(mode, affinity)
+	if err := configureOutcomeGrounding(controller); err != nil {
+		return nil, err
+	}
 	maxStateAge, err := environmentDuration("KAVORA_BACKEND_STATE_MAX_AGE", 10*time.Second)
 	if err != nil {
 		return nil, err
@@ -282,6 +285,33 @@ func loadRouter() (*router.Controller, error) {
 		}
 	}
 	return controller, nil
+}
+
+func configureOutcomeGrounding(controller *router.Controller) error {
+	journalDirectory := environmentOrDefault("KAVORA_DECISION_JOURNAL_DIR", "results/state")
+	if journalDirectory != "off" && journalDirectory != "disabled" {
+		journal, err := router.OpenDecisionJournal(journalDirectory, nil)
+		if err != nil {
+			return fmt.Errorf("open decision journal: %w", err)
+		}
+		ledger, err := router.NewDecisionLedgerWithJournal(4096, journal)
+		if err != nil {
+			return fmt.Errorf("restore decision journal: %w", err)
+		}
+		controller.SetLedger(ledger)
+	}
+	if predictorPath := os.Getenv("KAVORA_TTFT_PREDICTOR_PATH"); predictorPath != "" {
+		data, err := os.ReadFile(predictorPath)
+		if err != nil {
+			return fmt.Errorf("read TTFT predictor: %w", err)
+		}
+		predictor, _, err := router.LoadTTFTPredictor(data)
+		if err != nil {
+			return fmt.Errorf("load TTFT predictor: %w", err)
+		}
+		controller.SetPredictor(predictor)
+	}
+	return nil
 }
 
 func runBackendHealthChecks(ctx context.Context, registry *backend.Registry) {

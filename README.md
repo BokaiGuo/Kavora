@@ -8,7 +8,7 @@
 ![Go](https://img.shields.io/badge/Go-gateway-00ADD8?logo=go&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-policy%20%26%20runtime-000000?logo=rust&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-observability%20%26%20research-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/python%20tests-86%20passing-2ea44f)
+[![CI](https://github.com/BokaiGuo/Kavora/actions/workflows/ci.yml/badge.svg)](https://github.com/BokaiGuo/Kavora/actions/workflows/ci.yml)
 
 Kavora is an open-source **evidence-aware AI inference control plane** for local and private LLM serving. It turns cache fidelity, state freshness, tenant constraints, and latency objectives into an inspectable backend decision rather than hiding placement behind a heuristic.
 
@@ -91,9 +91,11 @@ flowchart LR
 - Digest-verified Wasmtime execution with resource and capability controls.
 - Reproducible benchmarks, replay artifacts, promotion gates, and Markdown/JSON reports.
 - Semantic evidence alignment, automatic SLO threshold/concurrency calibration, and anonymous pre-canary workload replay.
+- Outcome-grounded routing with realized request results, prediction error, durable journals, fitted explainable TTFT predictors, drift gates, native vLLM KV-event recovery, and multi-policy replay.
 
 See [`docs/stage4_evidence_aware_routing.md`](docs/stage4_evidence_aware_routing.md) for the cache-evidence contract, decision API, lifecycle configuration, and fidelity/lag ablation.
 See [`docs/stage5_self_tuning.md`](docs/stage5_self_tuning.md) for semantic alignment, automatic calibration, anonymous replay, human approval, and rollback.
+See [`docs/stage6_outcome_grounded_control.md`](docs/stage6_outcome_grounded_control.md) for decision/outcome journals, predictor fitting, native KV events, prediction calibration, and policy laboratory semantics.
 
 ## Quick Start
 
@@ -287,7 +289,7 @@ bash scripts/generate_proto.sh --check
 make build
 ```
 
-The latest local validation passed with **66 Python tests**, Go race/vet, Rust test/clippy, protobuf consistency and full builds.
+The CI badge is the source of truth for the current automated gate. Local release validation additionally runs Go race/vet, Rust test/clippy, protobuf consistency, cross-language UDS integration, and full builds.
 
 ## Documentation
 

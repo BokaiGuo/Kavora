@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,10 +137,15 @@ func (p *ShadowIndexProvider) Match(_ context.Context, request CacheMatchRequest
 }
 
 type KVEvent struct {
+	Operation     string    `json:"operation,omitempty"`
 	BackendID     string    `json:"backend_id"`
 	CacheKey      string    `json:"cache_key"`
 	MatchedTokens int       `json:"matched_tokens"`
 	TotalTokens   int       `json:"total_tokens"`
+	Sequence      uint64    `json:"sequence,omitempty"`
+	HasSequence   bool      `json:"has_sequence,omitempty"`
+	Generation    string    `json:"generation,omitempty"`
+	EngineEventID string    `json:"engine_event_id,omitempty"`
 	ObservedAt    time.Time `json:"observed_at"`
 	Quality       Quality   `json:"quality"`
 }
@@ -150,13 +156,18 @@ type kvEventEntry struct {
 }
 
 type KVEventProvider struct {
-	mu      sync.Mutex
-	max     int
-	ttl     time.Duration
-	lambda  float64
-	now     func() time.Time
-	entries map[string]*list.Element
-	order   *list.List
+	mu           sync.Mutex
+	max          int
+	ttl          time.Duration
+	lambda       float64
+	now          func() time.Time
+	entries      map[string]*list.Element
+	order        *list.List
+	generation   map[string]string
+	lastSequence map[string]uint64
+	hasSequence  map[string]bool
+	seenEvents   map[string]struct{}
+	eventOrder   []string
 }
 
 func NewKVEventProvider(max int, ttl time.Duration, lambda float64, now func() time.Time) *KVEventProvider {
@@ -171,14 +182,21 @@ func NewKVEventProvider(max int, ttl time.Duration, lambda float64, now func() t
 	}
 	return &KVEventProvider{
 		max: max, ttl: ttl, lambda: lambda, now: timeSource(now),
-		entries: map[string]*list.Element{}, order: list.New(),
+		entries: map[string]*list.Element{}, order: list.New(), generation: map[string]string{}, lastSequence: map[string]uint64{}, hasSequence: map[string]bool{}, seenEvents: map[string]struct{}{},
 	}
 }
 
 func (*KVEventProvider) Name() CacheSource { return CacheSourceKVEvents }
 
 func (p *KVEventProvider) Observe(event KVEvent) {
-	if p == nil || event.BackendID == "" || event.CacheKey == "" {
+	if p == nil || event.BackendID == "" {
+		return
+	}
+	operation := event.Operation
+	if operation == "" {
+		operation = "store"
+	}
+	if operation != "clear" && event.CacheKey == "" {
 		return
 	}
 	if event.ObservedAt.IsZero() {
@@ -187,9 +205,50 @@ func (p *KVEventProvider) Observe(event KVEvent) {
 	if event.Quality == "" {
 		event.Quality = QualityFresh
 	}
-	key := event.BackendID + "\x00" + event.CacheKey
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if event.Generation != "" && p.generation[event.BackendID] != "" && p.generation[event.BackendID] != event.Generation {
+		p.clearBackendLocked(event.BackendID)
+		delete(p.lastSequence, event.BackendID)
+		delete(p.hasSequence, event.BackendID)
+	}
+	if event.Generation != "" {
+		p.generation[event.BackendID] = event.Generation
+	}
+	sequenced := event.HasSequence || event.Sequence > 0
+	if event.EngineEventID != "" {
+		eventKey := event.BackendID + "\x00" + event.EngineEventID
+		if _, exists := p.seenEvents[eventKey]; exists {
+			return
+		}
+		if sequenced && p.hasSequence[event.BackendID] && event.Sequence < p.lastSequence[event.BackendID] {
+			return
+		}
+		p.seenEvents[eventKey] = struct{}{}
+		p.eventOrder = append(p.eventOrder, eventKey)
+		for len(p.eventOrder) > p.max*4 {
+			delete(p.seenEvents, p.eventOrder[0])
+			p.eventOrder = p.eventOrder[1:]
+		}
+	} else if sequenced && p.hasSequence[event.BackendID] && event.Sequence <= p.lastSequence[event.BackendID] {
+		return
+	}
+	if sequenced {
+		p.lastSequence[event.BackendID] = event.Sequence
+		p.hasSequence[event.BackendID] = true
+	}
+	if operation == "clear" {
+		p.clearBackendLocked(event.BackendID)
+		return
+	}
+	key := event.BackendID + "\x00" + event.CacheKey
+	if operation == "remove" {
+		if element, ok := p.entries[key]; ok {
+			delete(p.entries, key)
+			p.order.Remove(element)
+		}
+		return
+	}
 	if element, ok := p.entries[key]; ok {
 		element.Value = kvEventEntry{key: key, event: event}
 		p.order.MoveToFront(element)
@@ -201,6 +260,16 @@ func (p *KVEventProvider) Observe(event KVEvent) {
 		entry := oldest.Value.(kvEventEntry)
 		delete(p.entries, entry.key)
 		p.order.Remove(oldest)
+	}
+}
+
+func (p *KVEventProvider) clearBackendLocked(backendID string) {
+	prefix := backendID + "\x00"
+	for key, element := range p.entries {
+		if strings.HasPrefix(key, prefix) {
+			delete(p.entries, key)
+			p.order.Remove(element)
+		}
 	}
 }
 

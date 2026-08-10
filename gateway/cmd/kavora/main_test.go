@@ -30,3 +30,26 @@ func TestReplayCommandAcceptsAnonymousTraceAndReportsCanaryGate(t *testing.T) {
 		t.Fatalf("output=%v", output)
 	}
 }
+
+func TestReplayCommandAcceptsRepeatedPolicies(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trace.jsonl")
+	trace := `{"prompt_tokens":1000,"output_tokens":32,"shared_prefix_hash":"a","shared_prefix_tokens":800,"tenant_class":"research","arrival_delta_ms":0,"streaming":true,"model":"m"}` + "\n" +
+		`{"prompt_tokens":1000,"output_tokens":32,"shared_prefix_hash":"a","shared_prefix_tokens":800,"tenant_class":"research","arrival_delta_ms":5,"streaming":true,"model":"m"}` + "\n"
+	if err := os.WriteFile(path, []byte(trace), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"--json", "replay", path, "--policy", "static", "--policy", "load-aware", "--policy", "kv-v2", "--evidence-quality", "strict"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	var output struct {
+		Policies []map[string]any `json:"policies"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatal(err)
+	}
+	if len(output.Policies) != 3 {
+		t.Fatalf("output=%s", stdout.String())
+	}
+}

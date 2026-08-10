@@ -60,6 +60,29 @@ func TestHandlerServesDecisionLedger(t *testing.T) {
 	}
 }
 
+func TestHandlerServesPredictionQuality(t *testing.T) {
+	controller := router.NewController(router.ModeStatic, nil)
+	controller.Ledger().Record(router.Decision{
+		RequestID: "req-quality",
+		Selected:  "gpu",
+		Candidates: []router.Candidate{{
+			BackendID:               "gpu",
+			PredictedTTFTMS:         100,
+			SLOViolationProbability: .25,
+			EvidenceQuality:         "strict",
+		}},
+	})
+	controller.RecordOutcome(router.DecisionOutcome{RequestID: "req-quality", ActualBackend: "gpu", TTFTMS: 130, Success: true, StatusCode: 200, CompletedAt: time.Now()})
+	handler := NewWithControlPlane(http.NotFoundHandler(), nil, nil, nil, controller, "secret")
+	request := httptest.NewRequest(http.MethodGet, "/v1/admin/prediction-quality?limit=100&slo_ms=120", nil)
+	request.Header.Set("Authorization", "Bearer secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"mae_ms":30`) {
+		t.Fatalf("response=%d %q", response.Code, response.Body.String())
+	}
+}
+
 func TestHandlerDelegatesGatewayAPI(t *testing.T) {
 	called := false
 	handler := New(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {

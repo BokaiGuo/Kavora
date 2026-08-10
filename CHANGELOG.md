@@ -4,6 +4,8 @@
 
 ### Added
 
+- Added Stage 6 decision/outcome records with realized TTFT, E2E, status, token/cache observations, prediction errors, JSONL persistence, and restart recovery.
+- Added explainable TTFT predictor fitting/loading, prediction-quality API/GUI, calibration drift lifecycle gates, native vLLM KV-event replay recovery, and a multi-policy replay laboratory.
 - Added backend semantic alignment with `strict`, `estimated`, `fallback`, and `missing` evidence quality across exporter snapshots, Prometheus self-checks, planner artifacts, advice, and routing decisions.
 - Added an SLO-aware automatic calibrator that scans cache thresholds and concurrency points, ranks RPS lower bounds with instability/evidence penalties, and emits human-approval deployment plans.
 - Added `kavora replay` for deterministic comparison of baseline and candidate policies over prompt-free workload signatures.

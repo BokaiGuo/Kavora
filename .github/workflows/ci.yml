@@ -13,9 +13,39 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install
+          cache: pip
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: policy-engine
+      - name: Install protobuf toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+          cargo install --locked protoc-gen-prost --version 0.5.0
+          cargo install --locked protoc-gen-tonic --version 0.5.0
+      - name: Install Python package
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Run tests
-        run: pytest -q
+      - name: Format and protobuf consistency
+        run: make fmt proto-check
+      - name: Test all languages
+        run: make test
+      - name: Race, vet, and clippy
+        run: |
+          go test -race ./...
+          go vet ./...
+          cargo clippy --manifest-path policy-engine/Cargo.toml --all-targets -- -D warnings
+      - name: Cross-language integration
+        run: make test-e2e-unary
+      - name: Build binaries
+        run: make build

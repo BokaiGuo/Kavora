@@ -28,22 +28,35 @@ type BackendDescriptor struct {
 }
 
 type TTFTPredictor struct {
-	BaseMS          float64
-	PromptTokenMS   float64
-	CachedTokenMS   float64
-	QueuePenaltyMS  float64
-	PressurePenalty float64
-	SLOScaleMS      float64
+	Version                string
+	Model                  string
+	GPUType                string
+	BackendEngine          string
+	BackendVersion         string
+	BaseMS                 float64
+	PromptTokenMS          float64
+	CachedTokenMS          float64
+	QueuePenaltyMS         float64
+	PressurePenalty        float64
+	SLOScaleMS             float64
+	UseObservedPrefillRate bool
+}
+
+func (predictor TTFTPredictor) Matches(model string, attributes map[string]string) bool {
+	return (predictor.Model == "" || predictor.Model == model) &&
+		(predictor.GPUType == "" || predictor.GPUType == attributes["gpu_type"]) &&
+		(predictor.BackendEngine == "" || predictor.BackendEngine == attributes["engine"]) &&
+		(predictor.BackendVersion == "" || predictor.BackendVersion == attributes["engine_version"])
 }
 
 func DefaultTTFTPredictor() TTFTPredictor {
-	return TTFTPredictor{BaseMS: 12, PromptTokenMS: .08, CachedTokenMS: .07, QueuePenaltyMS: 8, PressurePenalty: 45, SLOScaleMS: 25}
+	return TTFTPredictor{Version: "heuristic-v1", BaseMS: 12, PromptTokenMS: .08, CachedTokenMS: .07, QueuePenaltyMS: 8, PressurePenalty: 45, SLOScaleMS: 25, UseObservedPrefillRate: true}
 }
 
 func (predictor TTFTPredictor) Predict(promptTokens, matchedTokens int, queueDepth, pressure, recentPrefillRate float64) float64 {
 	uncached := maxInt(promptTokens-matchedTokens, 0)
 	prefillCost := float64(uncached) * predictor.PromptTokenMS
-	if recentPrefillRate > 0 {
+	if predictor.UseObservedPrefillRate && recentPrefillRate > 0 {
 		prefillCost = float64(uncached) / recentPrefillRate * 1000
 	}
 	cacheLookupCost := float64(matchedTokens) * predictor.CachedTokenMS
@@ -133,8 +146,31 @@ func (c *Controller) SetLifecycle(lifecycle *Lifecycle) {
 	defer c.mu.Unlock()
 	c.lifecycle = lifecycle
 }
-func (c *Controller) Lifecycle() *Lifecycle   { c.mu.RLock(); defer c.mu.RUnlock(); return c.lifecycle }
-func (c *Controller) Ledger() *DecisionLedger { return c.ledger }
+func (c *Controller) Lifecycle() *Lifecycle { c.mu.RLock(); defer c.mu.RUnlock(); return c.lifecycle }
+func (c *Controller) Ledger() *DecisionLedger {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ledger
+}
+func (c *Controller) SetLedger(ledger *DecisionLedger) {
+	if ledger == nil {
+		ledger = NewDecisionLedger(4096)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ledger = ledger
+}
+func (c *Controller) SetPredictor(predictor TTFTPredictor) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.predictor = predictor
+}
+func (c *Controller) PredictionQuality(limit int, sloMS float64) PredictionQuality {
+	c.mu.RLock()
+	ledger := c.ledger
+	c.mu.RUnlock()
+	return ledger.PredictionQuality(limit, sloMS)
+}
 
 func (c *Controller) snapshot() (Mode, time.Duration, map[string]backendstate.Snapshot, CacheStateProvider, TTFTPredictor, *Lifecycle, func() time.Time) {
 	c.mu.RLock()
@@ -221,8 +257,13 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 		candidate.PrefixMatch, candidate.MatchedTokens = evidence.MatchRatio, evidence.MatchedTokens
 		candidate.CacheSource, candidate.CacheQuality, candidate.CacheConfidence = evidence.Source, evidence.Quality, evidence.Confidence
 		candidate.EvidenceQuality = evidence.EvidenceQuality
-		candidate.PredictedTTFTMS = predictor.Predict(request.PromptTokens, evidence.MatchedTokens, candidate.QueueDepth, candidate.KVPressure, candidate.RecentPrefillRate)
-		candidate.SLOViolationProbability = predictor.ViolationProbability(candidate.PredictedTTFTMS, request.TTFTSLOMS)
+		effectivePredictor := predictor
+		if !predictor.Matches(request.Model, backend.Attributes) {
+			effectivePredictor = DefaultTTFTPredictor()
+		}
+		candidate.PredictorVersion = effectivePredictor.Version
+		candidate.PredictedTTFTMS = effectivePredictor.Predict(request.PromptTokens, evidence.MatchedTokens, candidate.QueueDepth, candidate.KVPressure, candidate.RecentPrefillRate)
+		candidate.SLOViolationProbability = effectivePredictor.ViolationProbability(candidate.PredictedTTFTMS, request.TTFTSLOMS)
 		confidence := evidence.Confidence
 		if mode == ModeLoadAware {
 			confidence = math.Max(stateConfidence, .01)
@@ -232,6 +273,7 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 		decision.Candidates = append(decision.Candidates, candidate)
 	}
 	sortCandidates(decision.Candidates)
+	decision.PredictorVersion = predictorVersions(decision.Candidates)
 	for _, candidate := range decision.Candidates {
 		if !candidate.Eligible {
 			continue
@@ -250,6 +292,7 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 			break
 		}
 		decision.Selected = candidate.BackendID
+		decision.PredictorVersion = candidate.PredictorVersion
 		decision.Fallback = false
 		decision.Reason = "highest_confidence_weighted_score"
 		decision.Reasons = []string{"hard_constraints_satisfied", fmt.Sprintf("cache_match=%.3f confidence=%.3f", candidate.PrefixMatch, candidate.CacheConfidence), fmt.Sprintf("predicted_ttft_ms=%.2f", candidate.PredictedTTFTMS), candidate.Reason}
@@ -260,6 +303,23 @@ func (c *Controller) Plan(ctx context.Context, request RoutingRequest, backends 
 	}
 	c.ledger.Record(decision)
 	return decision
+}
+
+func predictorVersions(candidates []Candidate) string {
+	version := ""
+	for _, candidate := range candidates {
+		if !candidate.Eligible || candidate.PredictorVersion == "" {
+			continue
+		}
+		if version == "" {
+			version = candidate.PredictorVersion
+			continue
+		}
+		if version != candidate.PredictorVersion {
+			return "mixed"
+		}
+	}
+	return version
 }
 
 func (c *Controller) Decide(requestID, tenantID, cacheKey string) Decision {
@@ -310,10 +370,21 @@ func (c *Controller) PreferredIDsForDecision(decision Decision, cacheKey string)
 }
 
 func (c *Controller) RecordActual(requestID, backendID string) {
-	if decision, ok := c.ledger.Get(requestID); ok && c.affinity != nil && decision.CacheKey != "" {
+	ledger := c.Ledger()
+	if decision, ok := ledger.Get(requestID); ok && c.affinity != nil && decision.CacheKey != "" {
 		c.affinity.Put(decision.TenantID, decision.CacheKey, backendID, decision.OccurredAt)
 	}
-	c.ledger.UpdateActual(requestID, backendID)
+	ledger.UpdateActual(requestID, backendID)
+}
+func (c *Controller) RecordOutcome(outcome DecisionOutcome) {
+	if outcome.RequestID == "" {
+		return
+	}
+	ledger := c.Ledger()
+	if decision, ok := ledger.Get(outcome.RequestID); ok && c.affinity != nil && decision.CacheKey != "" && outcome.ActualBackend != "" {
+		c.affinity.Put(decision.TenantID, decision.CacheKey, outcome.ActualBackend, outcome.CompletedAt)
+	}
+	ledger.RecordOutcome(outcome)
 }
 func (c *Controller) ObserveKVEvent(event KVEvent) bool {
 	provider, ok := c.CacheProvider().(*KVEventProvider)

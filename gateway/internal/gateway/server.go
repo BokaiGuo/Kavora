@@ -122,6 +122,8 @@ func New(config Config) (*Server, error) {
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	started := time.Now()
 	observed := &observedWriter{ResponseWriter: writer}
+	requestID := ""
+	realized := requestOutcomeObservation{}
 	var requestWriter http.ResponseWriter = observed
 	if _, ok := writer.(http.Flusher); ok {
 		requestWriter = &observedFlusher{observedWriter: observed}
@@ -154,13 +156,39 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			Stream:     isStream,
 			DurationMS: time.Since(started).Milliseconds(),
 		})
+		if server.router != nil && requestID != "" && realized.routed {
+			ttftMS := 0.0
+			if realized.ttftMS != nil {
+				ttftMS = *realized.ttftMS
+			} else if isStream && !observed.firstWriteAt.IsZero() {
+				ttftMS = float64(observed.firstWriteAt.Sub(started).Microseconds()) / 1000
+			}
+			server.router.RecordOutcome(router.DecisionOutcome{
+				RequestID:             requestID,
+				ActualBackend:         realized.actualBackend,
+				TTFTMS:                ttftMS,
+				E2EMS:                 float64(time.Since(started).Microseconds()) / 1000,
+				Success:               status >= 200 && status < 300,
+				StatusCode:            status,
+				PromptTokens:          realized.promptTokens,
+				OutputTokens:          realized.outputTokens,
+				Model:                 realized.model,
+				GPUType:               realized.gpuType,
+				BackendEngine:         realized.backendEngine,
+				BackendVersion:        realized.backendVersion,
+				ObservedCacheHitRatio: realized.cacheHitRatio,
+				ObservedMatchedTokens: realized.matchedTokens,
+				CompletedAt:           time.Now().UTC(),
+			})
+		}
 	}()
 	if request.Method != http.MethodPost || request.URL.Path != "/v1/chat/completions" {
 		http.NotFound(writer, request)
 		return
 	}
 
-	requestID, err := newRequestID()
+	var err error
+	requestID, err = newRequestID()
 	if err != nil {
 		writeGatewayError(writer, http.StatusInternalServerError, "INTERNAL", "failed to create request ID", "")
 		return
@@ -240,7 +268,9 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	if result != nil && result.EstimatedTokens <= uint64(math.MaxInt) {
 		promptTokens = int(result.EstimatedTokens)
 	}
-	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant, cacheKey, promptTokens, stream)
+	realized.promptTokens = promptTokens
+	realized.model = policyRequest.Request.Model
+	server.forward(writer, ctx, rawBody, policyRequest, requestID, activeTenant, cacheKey, promptTokens, stream, &realized)
 }
 
 func metricsOrDefault(metrics *telemetry.Metrics) *telemetry.Metrics {
@@ -252,7 +282,8 @@ func metricsOrDefault(metrics *telemetry.Metrics) *telemetry.Metrics {
 
 type observedWriter struct {
 	http.ResponseWriter
-	status int
+	status       int
+	firstWriteAt time.Time
 }
 
 func (writer *observedWriter) WriteHeader(status int) {
@@ -267,7 +298,24 @@ func (writer *observedWriter) Write(data []byte) (int, error) {
 	if writer.status == 0 {
 		writer.WriteHeader(http.StatusOK)
 	}
+	if len(data) > 0 && writer.firstWriteAt.IsZero() {
+		writer.firstWriteAt = time.Now()
+	}
 	return writer.ResponseWriter.Write(data)
+}
+
+type requestOutcomeObservation struct {
+	routed         bool
+	actualBackend  string
+	promptTokens   int
+	outputTokens   int
+	model          string
+	gpuType        string
+	backendEngine  string
+	backendVersion string
+	ttftMS         *float64
+	cacheHitRatio  *float64
+	matchedTokens  *int
 }
 
 type observedFlusher struct {
@@ -378,6 +426,7 @@ func (server *Server) forward(
 	cacheKey string,
 	promptTokens int,
 	stream bool,
+	realized *requestOutcomeObservation,
 ) {
 	var flusher http.Flusher
 	var streamSession policycontract.StreamSession
@@ -411,6 +460,7 @@ func (server *Server) forward(
 	}
 
 	candidates, routingDecision := server.backendCandidates(requestID, activeTenant, cacheKey, promptTokens, policyRequest.Request.Model)
+	realized.routed = true
 	writer.Header().Set("X-Kavora-Routing-Mode", routingDecision.Mode)
 	writer.Header().Set("X-Kavora-Routing-Fallback", strconv.FormatBool(routingDecision.Fallback))
 	if routingDecision.Selected != "" {
@@ -421,6 +471,10 @@ func (server *Server) forward(
 		return
 	}
 	for _, candidate := range candidates {
+		realized.actualBackend = candidate.ID
+		realized.gpuType = candidate.Attributes["gpu_type"]
+		realized.backendEngine = candidate.Attributes["engine"]
+		realized.backendVersion = candidate.Attributes["engine_version"]
 		server.metrics.IncBackend(candidate.ID, "attempt")
 		backendURL := candidate.URL.ResolveReference(&url.URL{Path: "/v1/chat/completions"})
 		backendRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, backendURL.String(), bytes.NewReader(body))
@@ -454,13 +508,21 @@ func (server *Server) forward(
 		}
 		server.metrics.IncBackend(candidate.ID, "success")
 		writer.Header().Set("X-Kavora-Backend", candidate.ID)
+		realized.ttftMS = optionalHeaderPositiveFloat(response.Header, "X-Kavora-TTFT-MS")
+		realized.cacheHitRatio = optionalHeaderFloat(response.Header, "X-Kavora-Cache-Hit-Ratio")
+		realized.matchedTokens = optionalHeaderInt(response.Header, "X-Kavora-Matched-Tokens")
+		if realized.cacheHitRatio == nil && realized.matchedTokens != nil && realized.promptTokens > 0 {
+			ratio := math.Min(1, float64(*realized.matchedTokens)/float64(realized.promptTokens))
+			realized.cacheHitRatio = &ratio
+		}
 		if server.router != nil {
 			server.router.RecordActual(requestID, candidate.ID)
 		}
 		if stream {
+			realized.outputTokens = optionalHeaderIntValue(response.Header, "X-Kavora-Output-Tokens")
 			server.forwardStream(writer, response, flusher, streamSession, requestID, policyRequest.Context.FailMode)
 		} else {
-			server.forwardBuffered(writer, response, requestID)
+			realized.outputTokens = server.forwardBuffered(writer, response, requestID)
 		}
 		_ = response.Body.Close()
 		return
@@ -642,7 +704,7 @@ func (server *Server) forwardStream(
 	}
 }
 
-func (server *Server) forwardBuffered(writer http.ResponseWriter, response *http.Response, requestID string) {
+func (server *Server) forwardBuffered(writer http.ResponseWriter, response *http.Response, requestID string) int {
 	readLimit := server.maxResponseBytes
 	if readLimit < math.MaxInt64 {
 		readLimit++
@@ -650,16 +712,61 @@ func (server *Server) forwardBuffered(writer http.ResponseWriter, response *http
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, readLimit))
 	if err != nil {
 		writeGatewayError(writer, http.StatusBadGateway, "BACKEND_ERROR", "failed to read backend response", requestID)
-		return
+		return 0
 	}
 	if int64(len(responseBody)) > server.maxResponseBytes {
 		writeGatewayError(writer, http.StatusBadGateway, "BACKEND_RESPONSE_TOO_LARGE", "backend response exceeds configured limit", requestID)
-		return
+		return 0
 	}
 
 	copyBackendHeaders(writer.Header(), response.Header)
 	writer.WriteHeader(response.StatusCode)
 	_, _ = writer.Write(responseBody)
+	return completionTokens(responseBody)
+}
+
+func completionTokens(data []byte) int {
+	var payload struct {
+		Usage struct {
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(data, &payload) != nil || payload.Usage.CompletionTokens < 0 {
+		return 0
+	}
+	return payload.Usage.CompletionTokens
+}
+
+func optionalHeaderFloat(header http.Header, name string) *float64 {
+	value, err := strconv.ParseFloat(header.Get(name), 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 1 {
+		return nil
+	}
+	return &value
+}
+
+func optionalHeaderPositiveFloat(header http.Header, name string) *float64 {
+	value, err := strconv.ParseFloat(header.Get(name), 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
+		return nil
+	}
+	return &value
+}
+
+func optionalHeaderInt(header http.Header, name string) *int {
+	value, err := strconv.Atoi(header.Get(name))
+	if err != nil || value < 0 {
+		return nil
+	}
+	return &value
+}
+
+func optionalHeaderIntValue(header http.Header, name string) int {
+	value := optionalHeaderInt(header, name)
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func copyBackendHeaders(destination http.Header, source http.Header) {

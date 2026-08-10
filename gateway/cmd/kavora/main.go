@@ -22,6 +22,14 @@ type config struct {
 	APIKey  string `json:"api_key"`
 }
 
+type repeatedFlag []string
+
+func (values *repeatedFlag) String() string { return strings.Join(*values, ",") }
+func (values *repeatedFlag) Set(value string) error {
+	*values = append(*values, value)
+	return nil
+}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -85,7 +93,8 @@ func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput boo
 	tracePath := args[0]
 	flags := flag.NewFlagSet("replay", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	policy := flags.String("policy", "candidate", "baseline or candidate")
+	var policies repeatedFlag
+	flags.Var(&policies, "policy", "repeatable: static, load-aware, kv-v1, kv-v2; baseline/candidate aliases remain supported")
 	backends := flags.Int("backends", 2, "simulated backend count")
 	minHitRatio := flags.Float64("min-hit-ratio", .4, "candidate cache threshold")
 	maxConcurrency := flags.Int("max-concurrency", 16, "candidate concurrency ceiling")
@@ -97,8 +106,8 @@ func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput boo
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
-	if *policy != "baseline" && *policy != "candidate" {
-		return errors.New("--policy must be baseline or candidate")
+	if len(policies) == 0 {
+		policies = []string{"candidate"}
 	}
 	file, err := os.Open(tracePath)
 	if err != nil {
@@ -109,7 +118,7 @@ func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput boo
 	if err != nil {
 		return err
 	}
-	report, err := workloadreplay.Compare(trace, workloadreplay.Config{
+	config := workloadreplay.Config{
 		Backends:               *backends,
 		MinHitRatio:            *minHitRatio,
 		MaxConcurrency:         *maxConcurrency,
@@ -117,12 +126,19 @@ func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput boo
 		TTFTSLOMS:              *ttftSLOMS,
 		PrefillTokensPerSecond: *prefillRate,
 		DecodeTokensPerSecond:  *decodeRate,
-	})
+	}
+	var artifact any
+	var report workloadreplay.Report
+	if len(policies) > 1 || (policies[0] != "baseline" && policies[0] != "candidate") {
+		artifact, err = workloadreplay.EvaluatePolicies(trace, config, policies)
+	} else {
+		report, err = workloadreplay.Compare(trace, config)
+		artifact = report
+	}
 	if err != nil {
 		return err
 	}
-	var artifact any = report
-	if *policy == "baseline" {
+	if len(policies) == 1 && policies[0] == "baseline" {
 		artifact = map[string]any{
 			"schema_version": workloadreplay.SchemaVersion,
 			"policy":         "baseline",
@@ -146,7 +162,7 @@ func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput boo
 		_, err = fmt.Fprintln(stdout, string(encoded))
 		return err
 	}
-	if *policy == "baseline" {
+	if len(policies) == 1 && policies[0] == "baseline" {
 		fmt.Fprintf(
 			stdout,
 			"Baseline policy\nP95 TTFT %.2f ms\nThroughput %.2f req/s\nSLO violations %.2f%%\nCache reuse %.2f%%\n",
@@ -155,6 +171,15 @@ func runReplay(args []string, stdout io.Writer, stderr io.Writer, jsonOutput boo
 			report.Baseline.SLOViolationRate*100,
 			report.Baseline.CacheReuseRatio*100,
 		)
+		return nil
+	}
+	if len(policies) > 1 || (policies[0] != "candidate" && policies[0] != "baseline") {
+		laboratory := artifact.(workloadreplay.LaboratoryReport)
+		fmt.Fprintln(stdout, "Policy laboratory")
+		fmt.Fprintln(stdout, "policy\tp95_ttft_ms\tslo_violation\timbalance")
+		for _, result := range laboratory.Policies {
+			fmt.Fprintf(stdout, "%s\t%.2f\t%.2f%%\t%.2f%%\n", result.Policy, result.Metrics.P95TTFTMS, result.Metrics.SLOViolationRate*100, result.Metrics.BackendImbalance*100)
+		}
 		return nil
 	}
 	fmt.Fprintf(
@@ -381,7 +406,7 @@ Usage:
   kavora backends [--json] [--base-url URL]
   kavora advice [--json] [--base-url URL]
   kavora chat [--json] --message TEXT [--model NAME] [--stream]
-  kavora replay trace.jsonl --policy baseline|candidate [--json]
+  kavora replay trace.jsonl --policy static [--policy load-aware --policy kv-v1 --policy kv-v2] [--json]
   kavora config init --api-key KEY [--base-url URL]
 
 Environment:

@@ -1,11 +1,11 @@
 [project]
 name = "kvcache-observability"
 version = "0.1.0"
-description = "KV cache observability for vLLM and SGLang: Prometheus exporter, benchmarks, capacity planning"
+description = "Evidence-aware inference control plane for vLLM and SGLang"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-authors = [{ name = "KVcacheexporter contributors" }]
+authors = [{ name = "Kavora contributors" }]
 dependencies = [
   "fastapi>=0.115.0",
   "httpx>=0.27.0",
@@ -15,6 +15,8 @@ dependencies = [
   "pydantic-settings>=2.3.0",
   "uvicorn>=0.30.0",
   "pyyaml>=6.0.0",
+  "msgspec>=0.19.0",
+  "pyzmq>=27.0.0",
 ]
 
 [project.optional-dependencies]
@@ -33,4 +35,5 @@ packages = [
   "exporter.registry",
   "benchmark",
   "planner",
+  "engine_events",
 ]

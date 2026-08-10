@@ -22,6 +22,8 @@ type LifecycleGates struct {
 	MaxErrorDelta           float64 `yaml:"max_error_delta" json:"max_error_delta"`
 	MaxFallbackRate         float64 `yaml:"max_fallback_rate" json:"max_fallback_rate"`
 	MaxSLOViolationRate     float64 `yaml:"max_slo_violation_rate" json:"max_slo_violation_rate"`
+	MaxPredictionMAEMS      float64 `yaml:"max_prediction_mae_ms" json:"max_prediction_mae_ms"`
+	MaxEvidenceErrorRate    float64 `yaml:"max_evidence_error_rate" json:"max_evidence_error_rate"`
 }
 
 type LifecycleConfig struct {
@@ -41,6 +43,8 @@ type LifecycleObservation struct {
 	SLOViolationRate     float64 `json:"slo_violation_rate"`
 	StateHealthy         bool    `json:"state_healthy"`
 	PolicyHealthy        bool    `json:"policy_healthy"`
+	PredictionMAEMS      float64 `json:"prediction_mae_ms"`
+	EvidenceErrorRate    float64 `json:"evidence_error_rate"`
 }
 
 type LifecycleSnapshot struct {
@@ -148,6 +152,10 @@ func (lifecycle *Lifecycle) Observe(observation LifecycleObservation) LifecycleS
 	gates := lifecycle.config.Gates
 	if observation.P95RegressionPercent > gates.MaxP95RegressionPercent || observation.ErrorDelta > gates.MaxErrorDelta || observation.FallbackRate > gates.MaxFallbackRate || observation.SLOViolationRate > gates.MaxSLOViolationRate {
 		lifecycle.stage, lifecycle.step, lifecycle.lastReason, lifecycle.approved, lifecycle.approvedBy = StageStatic, 0, "quality_gate_failed", false, ""
+		return lifecycle.snapshotLocked()
+	}
+	if (gates.MaxPredictionMAEMS > 0 && observation.PredictionMAEMS > gates.MaxPredictionMAEMS) || (gates.MaxEvidenceErrorRate > 0 && observation.EvidenceErrorRate > gates.MaxEvidenceErrorRate) {
+		lifecycle.stage, lifecycle.step, lifecycle.lastReason, lifecycle.approved, lifecycle.approvedBy = StageStatic, 0, "prediction_or_evidence_drift", false, ""
 		return lifecycle.snapshotLocked()
 	}
 	if lifecycle.stage == StageShadow && lifecycle.config.RequireHumanApproval && !lifecycle.approved {

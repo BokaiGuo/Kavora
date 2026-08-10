@@ -74,3 +74,32 @@ func TestCandidateDoesNotCreateAffinityForEmptyPrefixHash(t *testing.T) {
 		t.Fatalf("metrics=%+v", metrics)
 	}
 }
+
+func TestPolicyLaboratoryEvaluatesMultiplePolicies(t *testing.T) {
+	trace := []Signature{
+		{PromptTokens: 1000, OutputTokens: 32, SharedPrefixHash: "a", SharedPrefixTokens: 800, TenantClass: "research", Model: "m"},
+		{PromptTokens: 1000, OutputTokens: 32, SharedPrefixHash: "b", SharedPrefixTokens: 800, TenantClass: "research", ArrivalDeltaMS: 5, Model: "m"},
+		{PromptTokens: 1000, OutputTokens: 32, SharedPrefixHash: "a", SharedPrefixTokens: 800, TenantClass: "research", ArrivalDeltaMS: 5, Model: "m"},
+	}
+	report, err := EvaluatePolicies(trace, Config{Backends: 3, MinHitRatio: .4, MaxConcurrency: 8, EvidenceQuality: "strict"}, []string{"static", "load-aware", "kv-v1", "kv-v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Policies) != 4 || report.Policies[0].Policy != "static" || report.Policies[3].Policy != "kv-v2" {
+		t.Fatalf("report=%+v", report)
+	}
+	if report.ClaimBoundary == "" {
+		t.Fatal("policy laboratory must retain the simulation claim boundary")
+	}
+}
+
+func TestPolicyReplayDoesNotReusePrefixesAcrossModels(t *testing.T) {
+	trace := []Signature{
+		{PromptTokens: 1000, SharedPrefixHash: "same", SharedPrefixTokens: 800, TenantClass: "research", Model: "model-a"},
+		{PromptTokens: 1000, SharedPrefixHash: "same", SharedPrefixTokens: 800, TenantClass: "research", Model: "model-b"},
+	}
+	metrics := simulatePolicy(trace, normalize(Config{Backends: 1, EvidenceQuality: "strict"}), "kv-v1")
+	if metrics.CacheReuseRatio != 0 {
+		t.Fatalf("metrics=%+v", metrics)
+	}
+}

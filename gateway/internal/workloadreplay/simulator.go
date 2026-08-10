@@ -63,6 +63,18 @@ type Report struct {
 	ClaimBoundary   string     `json:"claim_boundary"`
 }
 
+type PolicyResult struct {
+	Policy  string  `json:"policy"`
+	Metrics Metrics `json:"metrics"`
+}
+
+type LaboratoryReport struct {
+	SchemaVersion   string         `json:"schema_version"`
+	EvidenceQuality string         `json:"evidence_quality"`
+	Policies        []PolicyResult `json:"policies"`
+	ClaimBoundary   string         `json:"claim_boundary"`
+}
+
 func ReadTrace(reader io.Reader) ([]Signature, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
@@ -99,8 +111,8 @@ func Compare(trace []Signature, config Config) (Report, error) {
 	if err := validateConfig(config); err != nil {
 		return Report{}, err
 	}
-	baseline := simulate(trace, config, false)
-	candidate := simulate(trace, config, true)
+	baseline := simulatePolicy(trace, config, "static")
+	candidate := simulatePolicy(trace, config, "kv-v1")
 	comparison := Comparison{
 		P95TTFTPercent:       percentChange(candidate.P95TTFTMS, baseline.P95TTFTMS),
 		ThroughputPercent:    percentChange(candidate.ThroughputReqS, baseline.ThroughputReqS),
@@ -120,6 +132,29 @@ func Compare(trace []Signature, config Config) (Report, error) {
 		ApprovalStatus: "human_approval_required",
 		ClaimBoundary:  "This is an offline deterministic simulation over anonymous workload signatures. It does not replay prompt content, mutate production configuration, or replace a real shadow/canary measurement.",
 	}, nil
+}
+
+func EvaluatePolicies(trace []Signature, config Config, policies []string) (LaboratoryReport, error) {
+	config = normalize(config)
+	if err := validateConfig(config); err != nil {
+		return LaboratoryReport{}, err
+	}
+	if len(policies) == 0 {
+		return LaboratoryReport{}, errors.New("at least one replay policy is required")
+	}
+	report := LaboratoryReport{
+		SchemaVersion:   SchemaVersion,
+		EvidenceQuality: config.EvidenceQuality,
+		ClaimBoundary:   "Policy laboratory results are deterministic simulations over anonymous workload signatures. They do not establish counterfactual production performance.",
+	}
+	for _, policy := range policies {
+		policy = canonicalPolicy(policy)
+		if !validPolicy(policy) {
+			return LaboratoryReport{}, fmt.Errorf("unsupported replay policy %q", policy)
+		}
+		report.Policies = append(report.Policies, PolicyResult{Policy: policy, Metrics: simulatePolicy(trace, config, policy)})
+	}
+	return report, nil
 }
 
 func normalize(config Config) Config {
@@ -155,6 +190,14 @@ func validateConfig(config Config) error {
 }
 
 func simulate(trace []Signature, config Config, candidatePolicy bool) Metrics {
+	policy := "static"
+	if candidatePolicy {
+		policy = "kv-v1"
+	}
+	return simulatePolicy(trace, config, policy)
+}
+
+func simulatePolicy(trace []Signature, config Config, policy string) Metrics {
 	backendAvailable := make([]float64, config.Backends)
 	routeCounts := make([]float64, config.Backends)
 	prefixOwner := map[string]int{}
@@ -177,16 +220,28 @@ func simulate(trace []Signature, config Config, candidatePolicy bool) Metrics {
 		backend := index % config.Backends
 		ratio := float64(signature.SharedPrefixTokens) / float64(signature.PromptTokens)
 		hasReusablePrefix := signature.SharedPrefixTokens > 0 && signature.SharedPrefixHash != ""
-		if candidatePolicy && hasReusablePrefix {
-			if owner, ok := prefixOwner[signature.SharedPrefixHash]; ok && ratio >= config.MinHitRatio && config.EvidenceQuality != "missing" {
+		prefixKey := signature.Model + "\x00" + signature.SharedPrefixHash
+		least := leastAvailable(backendAvailable)
+		switch policy {
+		case "load-aware":
+			backend = least
+		case "kv-v1", "kv-v2":
+			backend = least
+			if owner, ok := prefixOwner[prefixKey]; hasReusablePrefix && ok && ratio >= config.MinHitRatio && config.EvidenceQuality != "missing" {
 				backend = owner
-			} else {
-				backend = leastAvailable(backendAvailable)
+				if policy == "kv-v2" {
+					ownerQueue := math.Max(0, backendAvailable[owner]-admission)
+					leastQueue := math.Max(0, backendAvailable[least]-admission)
+					cacheBenefit := float64(signature.SharedPrefixTokens) / config.PrefillTokensPerSecond * 1000
+					if ownerQueue > leastQueue+cacheBenefit {
+						backend = least
+					}
+				}
 			}
 		}
 		queueDelay := math.Max(0, backendAvailable[backend]-admission)
 		cached := 0
-		if owner, ok := prefixOwner[signature.SharedPrefixHash]; hasReusablePrefix && ok && owner == backend {
+		if owner, ok := prefixOwner[prefixKey]; hasReusablePrefix && ok && owner == backend {
 			cached = signature.SharedPrefixTokens
 		}
 		uncached := signature.PromptTokens - cached
@@ -198,7 +253,7 @@ func simulate(trace []Signature, config Config, candidatePolicy bool) Metrics {
 			finish = backendAvailable[backend]
 		}
 		if hasReusablePrefix {
-			prefixOwner[signature.SharedPrefixHash] = backend
+			prefixOwner[prefixKey] = backend
 		}
 		routeCounts[backend]++
 		ttfts = append(ttfts, ttft)
@@ -217,6 +272,21 @@ func simulate(trace []Signature, config Config, candidatePolicy bool) Metrics {
 		CacheReuseRatio:  safeRatio(float64(reusedTokens), float64(sharedTokens)),
 		BackendImbalance: coefficientOfVariation(routeCounts),
 	}
+}
+
+func canonicalPolicy(policy string) string {
+	switch policy {
+	case "baseline":
+		return "static"
+	case "candidate":
+		return "kv-v1"
+	default:
+		return policy
+	}
+}
+
+func validPolicy(policy string) bool {
+	return policy == "static" || policy == "load-aware" || policy == "kv-v1" || policy == "kv-v2"
 }
 
 func retainAfter(values []float64, timestamp float64) []float64 {

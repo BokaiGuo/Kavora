@@ -12,5 +12,6 @@
 | [development.md](development.md) | Go、Rust、protobuf 与 Python 开发环境及版本门禁 |
 | [project_overview.md](project_overview.md) | Kavora 品牌、Go/Rust 组件体系与 KV-aware 路由的统一项目描述 |
 | [staged_goals.md](staged_goals.md) | 求职展示、真实可用和研究实验三个阶段的目标与验收标准 |
+| [stage6_outcome_grounded_control.md](stage6_outcome_grounded_control.md) | Decision + Outcome Ledger、预测器校准、原生 KV events 与 policy laboratory |
 | [superpowers/specs/2026-07-31-kvcache-control-plane-design.md](superpowers/specs/2026-07-31-kvcache-control-plane-design.md) | 双语言控制面的正式设计规格（待评审） |
 | [../报告.md](../报告.md) | 实验结果与可视化报告（含双子图/中文图） |

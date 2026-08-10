@@ -34,7 +34,24 @@ async function approveCanary() {
 function renderDecision(decision) {
   const requirements = Object.entries(decision.requirements || {}).map(([key, value]) => `${key}=${value}`).join(' · ') || 'none';
   const rows = (decision.candidates || []).map(candidate => `<tr class="${candidate.eligible ? '' : 'excluded'}"><td>${candidate.backend_id}</td><td>${candidate.eligible ? 'yes' : 'no'}</td><td>${candidate.cache_source} / ${candidate.cache_quality}</td><td>${(candidate.cache_confidence || 0).toFixed(3)}</td><td>${candidate.matched_tokens}</td><td>${(candidate.queue_depth || 0).toFixed(2)}</td><td>${(candidate.predicted_ttft_ms || 0).toFixed(1)}</td><td>${(candidate.score || 0).toFixed(2)}</td><td>${candidate.excluded_by?.join(', ') || candidate.reason}</td></tr>`).join('');
-  $('decision-inspector').innerHTML = `<div class="decision-summary"><span>MODE <strong>${decision.mode}</strong></span><span>SELECTED <strong>${decision.selected || 'static fallback'}</strong></span><span>ACTUAL <strong>${decision.actual_selected || 'pending'}</strong></span><span>REASON <strong>${decision.reason}</strong></span><span>REQUIREMENTS <strong>${requirements}</strong></span></div><div class="decision-table-wrap"><table><thead><tr><th>Backend</th><th>Eligible</th><th>Evidence</th><th>Confidence</th><th>Matched</th><th>Queue</th><th>TTFT ms</th><th>Score</th><th>Explanation</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const error = decision.prediction_error ? `${decision.prediction_error.ttft_signed_error_ms.toFixed(1)} ms` : 'pending';
+  const predictor = decision.prediction_error?.predictor_version || decision.predictor_version || 'unknown';
+  $('decision-inspector').innerHTML = `<div class="decision-summary"><span>MODE <strong>${decision.mode}</strong></span><span>PREDICTOR <strong>${predictor}</strong></span><span>SELECTED <strong>${decision.selected || 'static fallback'}</strong></span><span>ACTUAL <strong>${decision.actual_selected || 'pending'}</strong></span><span>TTFT ERROR <strong>${error}</strong></span><span>REASON <strong>${decision.reason}</strong></span><span>REQUIREMENTS <strong>${requirements}</strong></span></div><div class="decision-table-wrap"><table><thead><tr><th>Backend</th><th>Eligible</th><th>Evidence</th><th>Confidence</th><th>Matched</th><th>Queue</th><th>TTFT ms</th><th>Score</th><th>Explanation</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function predictionQuality() {
+  try {
+    const response = await fetch('/v1/admin/prediction-quality?limit=500', { headers: adminHeaders() });
+    if (!response.ok) throw Error(await response.text());
+    const quality = await response.json();
+    $('prediction-state').textContent = (quality.status || 'unknown').replaceAll('_', ' ').toUpperCase();
+    const buckets = (quality.slo_calibration || []).map(bucket => `<tr><td>${bucket.bucket}</td><td>${bucket.samples}</td><td>${(bucket.predicted_probability * 100).toFixed(1)}%</td><td>${(bucket.actual_violation_rate * 100).toFixed(1)}%</td></tr>`).join('');
+    const evidence = (quality.evidence_quality || []).map(item => `<div class="quality-card"><span>${item.evidence_quality}</span><strong>${item.mae_ms.toFixed(1)} ms TTFT</strong><small>${item.cache_samples ? (item.cache_hit_mae * 100).toFixed(1) + '% cache error · ' : ''}${item.samples} samples</small></div>`).join('');
+    $('prediction-quality').innerHTML = `<div class="quality-metrics"><div><span>MAE</span><strong>${(quality.mae_ms || 0).toFixed(1)} ms</strong></div><div><span>P95 ERROR</span><strong>${(quality.p95_absolute_error_ms || 0).toFixed(1)} ms</strong></div><div><span>BIAS</span><strong>${(quality.mean_signed_error_ms || 0).toFixed(1)} ms</strong></div><div><span>SAMPLES</span><strong>${quality.samples || 0}</strong></div></div><div class="quality-grid">${evidence || '<span class="backend-empty">No evidence groups yet.</span>'}</div><div class="decision-table-wrap"><table><thead><tr><th>Predicted bucket</th><th>Samples</th><th>Predicted risk</th><th>Actual violation</th></tr></thead><tbody>${buckets}</tbody></table></div>`;
+  } catch (error) {
+    $('prediction-state').textContent = 'UNAVAILABLE';
+    $('prediction-quality').textContent = 'Prediction quality unavailable: ' + error.message;
+  }
 }
 
 async function inspectDecision(requestID = latestRequestID) {
@@ -139,12 +156,14 @@ send.onclick = async () => {
     send.disabled = false;
     await inspectDecision();
     await lifecycle();
+    await predictionQuality();
   }
 };
 
 $('refresh-decision').onclick = () => inspectDecision();
 $('approve-canary').onclick = () => approveCanary().catch(error => { $('decision-inspector').textContent = 'Approval failed: ' + error.message; });
-$('admin-token').onchange = () => { inspectDecision(); lifecycle(); };
+$('admin-token').onchange = () => { inspectDecision(); lifecycle(); predictionQuality(); };
 
 health();
 lifecycle();
+predictionQuality();
