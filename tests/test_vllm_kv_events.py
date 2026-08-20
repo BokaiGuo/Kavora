@@ -69,8 +69,8 @@ def test_replay_uses_streaming_dealer_protocol(tmp_path: Path) -> None:
         client_id, delimiter, start_sequence = request
         assert delimiter == b""
         assert int.from_bytes(start_sequence, "big") == 0
-        socket.send_multipart([client_id, b"", b"", (0).to_bytes(8, "big"), payload])
-        socket.send_multipart([client_id, b"", b"", (-1).to_bytes(8, "big", signed=True), b""])
+        socket.send_multipart([client_id, b"", (0).to_bytes(8, "big"), payload])
+        socket.send_multipart([client_id, b"", (-1).to_bytes(8, "big", signed=True), b""])
         socket.close(linger=0)
 
     thread = threading.Thread(target=publish_replay)

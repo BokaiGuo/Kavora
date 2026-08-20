@@ -39,6 +39,8 @@
 
 ### Verified
 
+- Real Stage 2 follow-up on 2026-08-20 completed with Qwen3-0.6B, vLLM 0.11.0, two RTX 5060 Ti replicas, 10 repetitions, five targets, four workloads, and zero request errors. The artifact is `results/stage2/real-2026-08-20-kv/`; it remains hardware/model/configuration scoped and does not claim generalized routing improvement.
+- Fixed local Stage 2 HTTP proxy interference, exporter-to-gateway backend ID mismatches, and vLLM 0.11 replay frame decoding; exact KV-event subscribers stayed alive for the full run.
 - Follow-up real vLLM isolated validation under `/tmp/vllm_restart_fix_check` completed without the earlier exporter `ConnectError` / `/readyz 503` restart-window issue.
 - Follow-up vLLM isolated validation produced a feasible `high_reuse` capacity point:
   - `capacity_high_hit_ratio = 0.6154`

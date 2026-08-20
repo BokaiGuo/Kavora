@@ -41,3 +41,17 @@ def test_stale_snapshot_keeps_value_but_marks_quality() -> None:
         stale=True,
     )
     assert snapshot["signals"]["total_blocks"]["quality"] == "stale"
+
+
+def test_backend_state_uses_explicit_gateway_backend_id() -> None:
+    snapshot = snapshot_from_derived(
+        DerivedSnapshot(
+            backend="vllm", model="m", instance="gpu-0", model_group="",
+            total_blocks=1, active_blocks=0, reusable_cached_blocks=0,
+            free_uncached_blocks=1, duplicate_cached_blocks=0, prefix_blocks=0,
+            hidden_reuse_ready_perc=0, effective_residency_perc=0, cold_free_perc=1,
+            cache_hit_ratio=0, queue_depth=0, running_requests=0,
+        ),
+        backend_id="gpu-0",
+    )
+    assert snapshot["backend_id"] == "gpu-0"

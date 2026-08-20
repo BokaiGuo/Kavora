@@ -206,7 +206,7 @@ class VLLMSubscriber:
         self.gateway_url = gateway_url.rstrip("/")
         self.topic = topic.encode("utf-8")
         headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
-        self.client = httpx.Client(headers=headers, timeout=timeout_seconds)
+        self.client = httpx.Client(headers=headers, timeout=timeout_seconds, trust_env=False)
         self.context = zmq.Context.instance()
 
     def _post(self, event: dict[str, Any]) -> None:
@@ -231,20 +231,18 @@ class VLLMSubscriber:
             first_sequence: int | None = None
             while True:
                 frames = socket.recv_multipart()
-                if len(frames) != 4 or frames[0] != b"" or len(frames[2]) != 8:
+                if len(frames) != 3 or frames[0] != b"" or len(frames[1]) != 8:
                     raise RuntimeError("invalid vLLM replay response")
-                sequence = int.from_bytes(frames[2], "big", signed=True)
+                sequence = int.from_bytes(frames[1], "big", signed=True)
                 if sequence == -1:
                     break
-                if frames[1] != self.topic:
-                    raise RuntimeError("vLLM replay topic does not match subscription topic")
                 if first_sequence is None:
                     first_sequence = sequence
                     if sequence > start_sequence:
                         raise RuntimeError(
                             f"vLLM replay buffer starts at {sequence}, before requested sequence {start_sequence} could be recovered"
                         )
-                self._deliver(sequence, frames[3])
+                self._deliver(sequence, frames[2])
         finally:
             socket.close(linger=0)
 

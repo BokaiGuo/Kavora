@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Local inference endpoints must bypass workstation HTTP proxies.
+export NO_PROXY="127.0.0.1,localhost,${NO_PROXY:-}"
+export no_proxy="$NO_PROXY"
+
 # shellcheck source=./lib/pid_utils.sh
 source "${ROOT}/scripts/lib/pid_utils.sh"
 
@@ -28,7 +32,7 @@ mkdir -p "$PID_DIR" "$LOG_DIR" "$CONFIG_DIR"
 wait_http() {
   local url="$1" timeout_s="${2:-180}" start
   start="$(date +%s)"
-  until curl -fsS "$url" >/dev/null 2>&1; do
+  until curl --noproxy '*' -fsS "$url" >/dev/null 2>&1; do
     if (( $(date +%s) - start >= timeout_s )); then
       echo "timed out waiting for $url" >&2
       return 1
@@ -109,7 +113,7 @@ EOF
 start_exporter() {
   local name="$1" backend_port="$2" exporter_port="$3" instance="$4"
   start_with_pid_file "$PID_DIR/$name.pid" bash -lc \
-    "cd \"$ROOT\" && exec env KVCACHE_BACKEND_METRICS_URL=http://127.0.0.1:$backend_port/metrics KVCACHE_BACKEND_TYPE=vllm KVCACHE_EXPORTER_HOST=127.0.0.1 KVCACHE_EXPORTER_PORT=$exporter_port KVCACHE_MODEL_NAME=\"$MODEL_NAME\" KVCACHE_INSTANCE_NAME=\"$instance\" KVCACHE_STATE_DIR=\"$RUN_DIR/state-$instance\" python3 -m exporter.app >\"$LOG_DIR/$name.log\" 2>&1"
+    "cd \"$ROOT\" && exec env KVCACHE_BACKEND_METRICS_URL=http://127.0.0.1:$backend_port/metrics KVCACHE_BACKEND_TYPE=vllm KVCACHE_EXPORTER_HOST=127.0.0.1 KVCACHE_EXPORTER_PORT=$exporter_port KVCACHE_MODEL_NAME=\"$MODEL_NAME\" KVCACHE_INSTANCE_NAME=\"$instance\" KVCACHE_BACKEND_ID=\"$instance\" KVCACHE_STATE_DIR=\"$RUN_DIR/state-$instance\" python3 -m exporter.app >\"$LOG_DIR/$name.log\" 2>&1"
 }
 
 start_gateway() {
@@ -128,6 +132,15 @@ start_kv_subscriber() {
   generation="$(cat /proc/sys/kernel/random/uuid)"
   start_with_pid_file "$PID_DIR/$name.pid" bash -lc \
     "cd \"$ROOT\" && exec python3 -m engine_events.vllm --backend-id \"$backend_id\" --generation \"$generation\" --endpoint tcp://127.0.0.1:$event_port --replay-endpoint tcp://127.0.0.1:$replay_port --gateway-url http://127.0.0.1:$ENFORCED_PORT --admin-token \"$ADMIN_TOKEN\" --checkpoint \"$RUN_DIR/$name.checkpoint.json\" >\"$LOG_DIR/$name.log\" 2>&1"
+}
+
+require_running() {
+  local pid_file="$1" label="$2" pid
+  pid="$(read_pid_file "$pid_file")"
+  if [[ -z "$pid" ]] || ! is_pid_running "$pid"; then
+    echo "$label exited during startup" >&2
+    return 1
+  fi
 }
 
 start_stack() {
@@ -162,6 +175,9 @@ start_stack() {
   wait_http "http://127.0.0.1:$ENFORCED_PORT/readyz" 60
   start_kv_subscriber kv-events-a gpu-0 "${EVENT_PORT_A:-15557}" "${REPLAY_PORT_A:-15558}"
   start_kv_subscriber kv-events-b gpu-1 "${EVENT_PORT_B:-15567}" "${REPLAY_PORT_B:-15568}"
+  sleep 1
+  require_running "$PID_DIR/kv-events-a.pid" "gpu-0 KV-event subscriber"
+  require_running "$PID_DIR/kv-events-b.pid" "gpu-1 KV-event subscriber"
   echo "Stage 2 local stack ready; config: $CONFIG_DIR/evaluation.yaml"
 }
 

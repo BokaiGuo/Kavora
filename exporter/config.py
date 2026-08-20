@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     exporter_port: int = 9108
     model_name: str = "unknown"
     instance_name: str = "local"
+    backend_id: str = ""
     model_group: str = ""
     poll_interval_s: float = 2.0
     scrape_stale_after_s: float = 120.0

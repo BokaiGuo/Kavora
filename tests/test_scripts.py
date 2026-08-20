@@ -78,6 +78,8 @@ def test_stage2_benchmark_requires_real_config_and_pair_launcher() -> None:
 def test_stage2_local_stack_wires_distinct_strategy_modes() -> None:
     stack = (ROOT / "scripts/stage2_local_stack.sh").read_text(encoding="utf-8")
 
+    assert 'export NO_PROXY="127.0.0.1,localhost,${NO_PROXY:-}"' in stack
+    assert "curl --noproxy '*'" in stack
     assert "gateway-static static" in stack
     assert "gateway-load load-aware" in stack
     assert "gateway-shadow shadow" in stack
@@ -85,5 +87,8 @@ def test_stage2_local_stack_wires_distinct_strategy_modes() -> None:
     assert "KAVORA_ROUTING_MODE=enforced" in stack
     assert "KAVORA_CACHE_FIDELITY=exact" in stack
     assert "KAVORA_VLLM_HASH_RESOLVER_URL" in stack
+    assert "KVCACHE_BACKEND_ID=\\\"$instance\\\"" in stack
+    assert 'require_running "$PID_DIR/kv-events-a.pid"' in stack
+    assert 'require_running "$PID_DIR/kv-events-b.pid"' in stack
     assert "KAVORA_BACKEND_STATE_URLS" in stack
     assert "make benchmark-stage2" in stack

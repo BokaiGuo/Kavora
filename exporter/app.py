@@ -66,7 +66,7 @@ def create_app(settings: Settings | None = None, *, start_poll_loop: bool = True
                 derived = compute_derived(native)
                 writer.write(derived)
                 backend_state.clear()
-                backend_state.update(snapshot_from_derived(derived))
+                backend_state.update(snapshot_from_derived(derived, backend_id=settings.backend_id or None))
                 advice.clear()
                 advice.update(build_advice(derived))
                 advice["observed_at_unix_millis"] = backend_state["observed_at_unix_millis"]
