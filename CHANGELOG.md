@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added capacity-sweep artifact validation for summary schema, report plot references, and readable PNG outputs; wired it into `make` and CI.
+
 ### Added
 
 - Added `kavora ui`, an animated terminal control surface with concurrent health/backend/advisor polling, color-safe snapshot mode, `q`/`r` keyboard controls, and stable `--json --once` output.

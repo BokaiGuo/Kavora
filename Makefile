@@ -1,4 +1,4 @@
-.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report cli-ui
+.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust check-capacity-sweep-artifact smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report cli-ui
 
 GO ?= go
 CARGO ?= cargo
@@ -55,6 +55,10 @@ test-rust:
 
 test-python:
 	$(PYTHON) -m pytest -q
+
+check-capacity-sweep-artifact:
+	@test -n "$(INPUT)" || (echo "usage: make check-capacity-sweep-artifact INPUT=results/capacity_sweeps/..."; exit 1)
+	$(PYTHON) scripts/check_capacity_sweep_artifact.py "$(INPUT)"
 
 smoke-vllm:
 	BACKEND_KIND=vLLM KAVORA_TENANT_CONFIG=$${KAVORA_TENANT_CONFIG:-$(CURDIR)/gateway/config.vllm.example.yaml} bash scripts/smoke_gateway_backend.sh

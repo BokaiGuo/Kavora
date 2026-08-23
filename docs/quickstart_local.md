@@ -102,6 +102,14 @@ bash scripts/launch_exporter.sh
 
 ## 4) 跑完整实验流：reuse + baseline compare + capacity sweep + threshold curve + final report
 
+完成 capacity sweep 后，可以先运行 artifact 门禁，确认 JSON、报告和图表没有脱节：
+
+```bash
+make check-capacity-sweep-artifact INPUT="results/capacity_sweeps/local_vllm_r3"
+```
+
+该检查只验证产物结构和图表可读性，不会把本地结果升级为真实 GPU 或生产性能结论。
+
 `scripts/experiment_template_local.sh` 现在默认采用**隔离执行**：
 
 - 在 `reuse experiment` 前会重启一次 serving stack

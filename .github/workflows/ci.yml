@@ -40,6 +40,43 @@ jobs:
         run: make fmt proto-check
       - name: Test all languages
         run: make test
+      - name: Validate capacity-sweep artifact contract
+        run: |
+          tmpdir=$(mktemp -d)
+          python - "$tmpdir" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          from PIL import Image
+
+          output = Path(sys.argv[1])
+          output.mkdir(parents=True, exist_ok=True)
+          document = {
+              "meta": {
+                  "experiment_schema_version": 3,
+                  "run_entry_schema_version": 2,
+                  "scenarios": ["ci"],
+                  "concurrency_values": [1],
+                  "repeats": 1,
+              },
+              "points": [{
+                  "scenario": "ci",
+                  "concurrency": 1,
+                  "runs": [{"repeat": 1}],
+                  "aggregates": {"quality_summary": {"metric_quality": "ok"}},
+                  "recommendation": {},
+                  "ranking": {},
+              }],
+              "ranking": {"by_scenario": {"ci": {}}},
+          }
+          (output / "summary.json").write_text(json.dumps(document), encoding="utf-8")
+          (output / "summary.md").write_text(
+              "## Ranking Plot\n\n![plot](capacity_sweep_ranking.png)\n",
+              encoding="utf-8",
+          )
+          Image.new("RGB", (2, 2), "white").save(output / "capacity_sweep_ranking.png")
+          PY
+          python scripts/check_capacity_sweep_artifact.py "$tmpdir"
       - name: Race, vet, and clippy
         run: |
           go test -race ./...
