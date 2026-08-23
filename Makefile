@@ -1,4 +1,4 @@
-.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust check-capacity-sweep-artifact smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report cli-ui
+.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust check-capacity-sweep-artifact final-report smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report cli-ui
 
 GO ?= go
 CARGO ?= cargo
@@ -59,6 +59,10 @@ test-python:
 check-capacity-sweep-artifact:
 	@test -n "$(INPUT)" || (echo "usage: make check-capacity-sweep-artifact INPUT=results/capacity_sweeps/..."; exit 1)
 	$(PYTHON) scripts/check_capacity_sweep_artifact.py "$(INPUT)"
+
+final-report:
+	@test -n "$(EXPERIMENT_DIR)" || (echo "usage: make final-report EXPERIMENT_DIR=results/experiments/... [CAPACITY_DIR=results/capacity_sweeps/...]"; exit 1)
+	$(PYTHON) scripts/generate_report_bundle.py --experiment-dir "$(EXPERIMENT_DIR)" $${CAPACITY_DIR:+--capacity-dir "$(CAPACITY_DIR)"} $${REPORT_OUT_DIR:+--out-dir "$(REPORT_OUT_DIR)"}
 
 smoke-vllm:
 	BACKEND_KIND=vLLM KAVORA_TENANT_CONFIG=$${KAVORA_TENANT_CONFIG:-$(CURDIR)/gateway/config.vllm.example.yaml} bash scripts/smoke_gateway_backend.sh

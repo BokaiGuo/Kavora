@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added capacity-sweep artifact validation for summary schema, report plot references, and readable PNG outputs; wired it into `make` and CI.
+- Added `make final-report` to discover experiment artifacts, copy report plots, and emit bilingual final reports.
 
 ### Added
 

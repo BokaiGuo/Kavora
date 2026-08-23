@@ -244,6 +244,16 @@ RUN_FINAL_REPORT_ZH=0 bash scripts/experiment_template_local.sh
 
 ## 6) 生成统一最终报告
 
+如果实验目录使用模板默认文件名，可以直接运行一条命令生成中英文报告并自动复制图表：
+
+```bash
+make final-report \
+  EXPERIMENT_DIR="results/experiments/reuse_local_vllm_r5" \
+  CAPACITY_DIR="results/capacity_sweeps/local_vllm_r3"
+```
+
+输出默认写回 `EXPERIMENT_DIR`，生成 `final_report.md`、`final_report_zh.md` 及报告引用的 PNG。需要单独输出目录时增加 `REPORT_OUT_DIR=...`。
+
 把 reuse、baseline compare、threshold curve、capacity sweep 汇总成一份 markdown：
 
 ```bash

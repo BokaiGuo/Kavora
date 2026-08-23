@@ -29,7 +29,7 @@
 | 优先级 | 任务 | 说明 |
 |---|---|---|
 | P1 | `vllm_obs` block 语义补丁接入 | 让 `hidden_reuse_ready_perc` 从“弱信号”变成“可判别信号” |
-| P1 | 报告自动化生成 | 一次命令产出 markdown + 图 + 结论段落 |
+| P1 | 报告自动化生成 | 已加入 `scripts/generate_report_bundle.py` 和 `make final-report`，自动发现产物并复制图表 |
 | P2 | CI 补充图表回归 | 已加入 `scripts/check_capacity_sweep_artifact.py`，检查 summary schema、Markdown 图引用和 PNG 可读性 |
 | P1 | 真实 GPU Stage 2 artifact | 补齐硬件、模型和原始请求级证据，作为 v0.1.0 发布门禁 |
 | P2 | SGLang 原生事件 transport | 在 SGLang 提供稳定事件协议后接入相同 sequence/generation contract |
