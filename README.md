@@ -137,6 +137,20 @@ build/kavora ui --once --no-color
 
 `kavora ui` is a terminal control surface: it polls gateway health, backend readiness, and tuning advice concurrently, then renders a compact animated dashboard. Use `--no-color` or `--json --once` for scripts and CI; the existing commands and JSON contracts are unchanged.
 
+#### CLI dashboard
+
+The dashboard is designed for a live terminal: healthy and degraded backends remain visible, advisor signals are color-coded, and the refresh frame gives the control plane a lightweight sense of motion without hiding evidence.
+
+![Kavora CLI dashboard online view](docs/assets/cli/kavora-ui-online.png)
+
+![Kavora CLI dashboard degraded view](docs/assets/cli/kavora-ui-degraded.png)
+
+These two screenshots are captured from the running `kavora ui` process through a real pseudo-terminal: the online view uses local fixture endpoints and the degraded view uses an unavailable gateway. No credentials or production traffic are included.
+
+![Kavora CLI dashboard concept](docs/assets/cli/kavora-ui-concept.png)
+
+The concept image above is retained as a visual direction reference; it is not a runtime capture.
+
 ### Build everything
 
 ```bash

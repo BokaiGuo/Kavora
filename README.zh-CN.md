@@ -129,6 +129,20 @@ build/kavora ui --once --no-color
 
 `kavora ui` 是终端控制台，会并发读取 Gateway 健康状态、后端就绪状态和调优建议，并以紧凑动画面板持续刷新。脚本或 CI 可使用 `--no-color` 或 `--json --once`；原有命令和 JSON 契约保持不变。
 
+#### CLI 控制台截图
+
+控制台面向真实终端设计：健康和异常后端同时可见，Advisor 信号使用颜色区分，刷新动画只增加反馈感，不会隐藏证据状态。
+
+![Kavora CLI 控制台正常状态](docs/assets/cli/kavora-ui-online.png)
+
+![Kavora CLI 控制台降级状态](docs/assets/cli/kavora-ui-degraded.png)
+
+这两张截图来自真实运行中的 `kavora ui` 进程和伪终端：正常状态使用本地 fixture 接口，降级状态使用不可用的 Gateway。截图不包含密钥或生产流量。
+
+![Kavora CLI 控制台概念图](docs/assets/cli/kavora-ui-concept.png)
+
+上面的概念图继续保留，作为视觉方向参考；它不是运行时截图。
+
 GUI 默认地址：`http://127.0.0.1:18000/ui/`
 
 ### 接入 vLLM/SGLang
