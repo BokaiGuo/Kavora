@@ -1,4 +1,4 @@
-.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust check-capacity-sweep-artifact final-report smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report cli-ui
+.PHONY: all build build-fake-backend build-go build-cli build-rust check-env fmt proto proto-check test test-e2e-stream test-e2e-unary test-go test-python test-rust check-capacity-sweep-artifact final-report operating-envelope smoke-vllm smoke-sglang benchmark-stage1 benchmark-stage2 benchmark-stage2-config benchmark-fidelity auto-calibrate fit-predictor validate-predictor policy-evaluation vllm-kv-events vllm-hash-resolver stage2-local demo-stage1 demo-kavora stage1-gate research-report cli-ui
 
 GO ?= go
 CARGO ?= cargo
@@ -97,6 +97,10 @@ validate-predictor:
 policy-evaluation:
 	@test -n "$(INPUT)" -a -n "$(EXPERIMENT_ID)" -a -n "$(CONTROL)" -a -n "$(TREATMENT)" || (echo "usage: make policy-evaluation INPUT=results/state EXPERIMENT_ID=... CONTROL=static TREATMENT=kv-v2"; exit 1)
 	$(PYTHON) -m planner.policy_evaluation --input "$(INPUT)" --experiment-id "$(EXPERIMENT_ID)" --control "$(CONTROL)" --treatment "$(TREATMENT)" $${SLO_MS:+--slo-ms "$$SLO_MS"} $${TPOT_SLO_MS:+--tpot-slo-ms "$$TPOT_SLO_MS"} $${STREAM_GAP_SLO_MS:+--stream-gap-slo-ms "$$STREAM_GAP_SLO_MS"} $${MIN_REQUESTS:+--min-requests "$$MIN_REQUESTS"} $${OUT:+--out "$$OUT"} $${REPORT:+--report "$$REPORT"}
+
+operating-envelope:
+	@test -n "$(INPUT)" || (echo "usage: make operating-envelope INPUT=results/capacity_sweeps/..."; exit 1)
+	$(PYTHON) -m planner.operating_envelope --input "$(INPUT)" $${SLO_MS:+--e2e-p95-slo-ms "$$SLO_MS"} $${RESOURCE_BUDGET_GPU_SECONDS:+--resource-budget-gpu-seconds "$$RESOURCE_BUDGET_GPU_SECONDS"} $${OUT:+--out "$$OUT"} $${REPORT:+--report "$$REPORT"}
 
 vllm-kv-events:
 	@test -n "$(BACKEND_ID)" -a -n "$(GENERATION)" -a -n "$(ENDPOINT)" -a -n "$(REPLAY_ENDPOINT)" || (echo "usage: make vllm-kv-events BACKEND_ID=... GENERATION=... ENDPOINT=tcp://127.0.0.1:5557 REPLAY_ENDPOINT=tcp://127.0.0.1:5558"; exit 1)

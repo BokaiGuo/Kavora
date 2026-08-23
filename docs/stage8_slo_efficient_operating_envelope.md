@@ -22,6 +22,7 @@ success
 - `planner.policy_evaluation` reports `slo_qualified_requests`, `slo_qualified_rate`, `goodput_req_s`, qualification reasons, TPOT/stream-gap samples, and treatment-vs-control goodput effect.
 - The evaluator accepts `--tpot-slo-ms` and `--stream-gap-slo-ms`; omitted constraints preserve the legacy TTFT-only qualification contract.
 - Missing configured stream metrics are classified as `tpot_missing` or `stream_gap_missing`, never silently converted to zero.
+- `planner.operating_envelope` selects a goodput lower-bound point under SLO and optional GPU-second budget, and emits the feasible set and Pareto points.
 
 ## Usage
 
@@ -35,6 +36,15 @@ make policy-evaluation \
   TPOT_SLO_MS=50 \
   STREAM_GAP_SLO_MS=60 \
   MIN_REQUESTS=500
+```
+
+After a capacity sweep has produced goodput and optional resource fields:
+
+```bash
+make operating-envelope \
+  INPUT=results/capacity_sweeps/local/summary.json \
+  SLO_MS=1500 \
+  RESOURCE_BUDGET_GPU_SECONDS=3600
 ```
 
 The report distinguishes:

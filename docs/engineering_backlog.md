@@ -35,7 +35,7 @@
 | P2 | SGLang 原生事件 transport | 在 SGLang 提供稳定事件协议后接入相同 sequence/generation contract |
 | P1 | Stage 7 online experiment artifact | 在真实请求上冻结 switchback 或 isolated-pool assignment、outcome journal 与 causal report |
 | P2 | held-out predictor evidence | 使用独立真实 GPU 时间窗运行已实现的 validator，并冻结泛化误差 artifact |
-| P1 | Stage 8 operating-point recommender | 以 goodput LCB、SLO 门禁、并发和资源预算选择 Pareto operating point |
+| P1 | Stage 8 operating-point recommender | 已加入 `planner.operating_envelope` 和 `make operating-envelope`，以 goodput LCB、SLO、安全门禁和 resource budget 选推荐点 |
 | P2 | GPU-second accounting | 接入可用的 GPU utilization/power evidence；不可用时显式标记 missing |
 
 ---

@@ -5,6 +5,7 @@
 - Added capacity-sweep artifact validation for summary schema, report plot references, and readable PNG outputs; wired it into `make` and CI.
 - Added `make final-report` to discover experiment artifacts, copy report plots, and emit bilingual final reports.
 - Added Stage 8 SLO-qualified goodput, optional TPOT/stream-gap constraints, and streaming outcome evidence in gateway journals and policy evaluation reports.
+- Added the Stage 8 operating-envelope recommender with goodput lower bounds, Pareto points, SLO gates, and explicit missing-resource semantics.
 
 ### Added
 

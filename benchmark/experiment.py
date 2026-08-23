@@ -44,6 +44,16 @@ def aggregate_run_entries(entries: list[dict[str, Any]]) -> dict[str, Any]:
         if hit_ratio is not None and metric_quality == "ok":
             hit_values.append(float(hit_ratio))
     hidden = [float(e.get("exporter_metrics", {}).get("kvcache_kv_hidden_reuse_ready_perc", 0.0)) for e in entries]
+    goodput_values = [
+        float(e["summary"].get("goodput_req_s"))
+        for e in entries
+        if e["summary"].get("goodput_req_s") is not None
+    ]
+    gpu_seconds = [
+        float(e.get("resource", {}).get("gpu_seconds"))
+        for e in entries
+        if e.get("resource", {}).get("gpu_seconds") is not None
+    ]
     quality_summary = summarize_runs_quality(entries)
     return {
         "repeats": len(entries),
@@ -51,6 +61,8 @@ def aggregate_run_entries(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "e2e_p95_ms_mean": sum(e2e) / len(e2e),
         "hit_ratio_mean": (sum(hit_values) / len(hit_values)) if hit_values else None,
         "hidden_reuse_mean": sum(hidden) / len(hidden),
+        "goodput_req_s_mean": sum(goodput_values) / len(goodput_values) if goodput_values else None,
+        "gpu_seconds_mean": sum(gpu_seconds) / len(gpu_seconds) if gpu_seconds else None,
         "quality_summary": quality_summary,
         "hit_ratio_missing_count": int(quality_summary["num_runs_missing_hit_ratio"]),
         "hit_ratio_stale_count": int(quality_summary["num_runs_stale_metrics"]),
