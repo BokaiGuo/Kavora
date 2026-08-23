@@ -121,7 +121,13 @@ build/kavora doctor
 build/kavora backends
 build/kavora chat --message "解释 Kavora 的请求路径"
 build/kavora advice
+# 带动画刷新的终端控制台（q 退出，r 立即刷新）
+build/kavora ui
+# CI/日志使用一次性无颜色快照
+build/kavora ui --once --no-color
 ```
+
+`kavora ui` 是终端控制台，会并发读取 Gateway 健康状态、后端就绪状态和调优建议，并以紧凑动画面板持续刷新。脚本或 CI 可使用 `--no-color` 或 `--json --once`；原有命令和 JSON 契约保持不变。
 
 GUI 默认地址：`http://127.0.0.1:18000/ui/`
 

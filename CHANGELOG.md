@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `kavora ui`, an animated terminal control surface with concurrent health/backend/advisor polling, color-safe snapshot mode, `q`/`r` keyboard controls, and stable `--json --once` output.
 - Added Stage 7 switchback and isolated-pool experiments, assignment metadata, cluster-bootstrap policy evaluation, workload strata, causal lifecycle gates, and held-out predictor validation.
 - Added vLLM request-to-external-block-hash alignment using the backend `/tokenize` API and vLLM's own hash implementation, including exact longest-prefix routing evidence.
 - Added Stage 6 decision/outcome records with realized TTFT, E2E, status, token/cache observations, prediction errors, JSONL persistence, and restart recovery.

@@ -129,7 +129,13 @@ build/kavora doctor
 build/kavora backends
 build/kavora chat --message "Explain the Kavora request path"
 build/kavora advice
+# Live terminal dashboard with animated refresh (q to quit, r to refresh)
+build/kavora ui
+# One non-interactive snapshot for CI/logs
+build/kavora ui --once --no-color
 ```
+
+`kavora ui` is a terminal control surface: it polls gateway health, backend readiness, and tuning advice concurrently, then renders a compact animated dashboard. Use `--no-color` or `--json --once` for scripts and CI; the existing commands and JSON contracts are unchanged.
 
 ### Build everything
 

@@ -142,7 +142,11 @@ CLI 的认证优先级是 `--api-key`、`KAVORA_API_KEY`、`~/.config/kavora/con
 ./build/kavora --json doctor
 ./build/kavora chat --model demo-model --message 'summarize the gateway boundary'
 ./build/kavora chat --stream=false --message 'return one sentence'
+./build/kavora ui
+./build/kavora ui --once --no-color
 ```
+
+`kavora ui` 提供实时终端 Dashboard：彩色状态卡、健康后端数量、权重条、Advisor 信号和刷新动画。TTY 中按 `q` 退出、按 `r` 立即刷新；非 TTY 默认只渲染一次，避免 CI/管道永久阻塞。需要机器读取时使用 `./build/kavora --json ui --once`。
 
 浏览器访问 `http://127.0.0.1:18000/ui/` 可打开 Kavora Control Room。GUI 会复用同一个 `/v1/chat/completions` SSE 接口，展示请求状态、策略结果、request ID 和延迟。请在 session-only 输入框中填写租户 API Key；它只作为请求头发送，不写入页面或服务端存储。
 

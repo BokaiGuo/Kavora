@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -51,5 +52,33 @@ func TestReplayCommandAcceptsRepeatedPolicies(t *testing.T) {
 	}
 	if len(output.Policies) != 3 {
 		t.Fatalf("output=%s", stdout.String())
+	}
+}
+
+func TestUIOnceNoColorRendersDashboardWithoutTTY(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"ui", "--once", "--no-color", "--base-url", "http://127.0.0.1:1"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "KAVORA CONTROL SURFACE") || !strings.Contains(stdout.String(), "BACKENDS") {
+		t.Fatalf("dashboard=%q", stdout.String())
+	}
+}
+
+func TestUIJSONOnceReturnsStableEnvelope(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"--json", "ui", "--once", "--base-url", "http://127.0.0.1:1"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	var output map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"at", "health", "backends", "advice", "errors"} {
+		if _, ok := output[key]; !ok {
+			t.Fatalf("missing %q in %v", key, output)
+		}
 	}
 }

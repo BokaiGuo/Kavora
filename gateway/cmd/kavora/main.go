@@ -72,6 +72,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		err = runConfig(args, stdout, stderr, jsonOutput)
 	case "replay":
 		err = runReplay(args, stdout, stderr, jsonOutput)
+	case "ui":
+		err = runUI(args, stdout, stderr, jsonOutput)
 	default:
 		err = fmt.Errorf("unknown command %q", command)
 	}
@@ -407,12 +409,17 @@ Usage:
   kavora advice [--json] [--base-url URL]
   kavora chat [--json] --message TEXT [--model NAME] [--stream]
   kavora replay trace.jsonl --policy static [--policy load-aware --policy kv-v1 --policy kv-v2] [--json]
-  kavora config init --api-key KEY [--base-url URL]
+	kavora config init --api-key KEY [--base-url URL]
+  kavora ui [--base-url URL] [--interval 2s] [--once] [--no-color]
 
 Environment:
   KAVORA_GATEWAY_URL  Gateway URL (default: http://127.0.0.1:18000)
   KAVORA_API_KEY      API key, preferred over the local config file
 
 Output:
-  Human-readable output is default; --json emits stable JSON to stdout.`)
+  Human-readable output is default; --json emits stable JSON to stdout.
+
+UI:
+  kavora ui opens a live terminal dashboard with backend health, advisor signals,
+  animated refresh, and ANSI styling. Use --once --no-color in scripts or CI.`)
 }
