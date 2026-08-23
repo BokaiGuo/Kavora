@@ -4,6 +4,7 @@
   "artifact": {
     "local_source": "results/stage2/real-2026-08-20-kv/",
     "bundle_name": "kavora-v0.1.0-stage2-real-2026-08-20-kv.tar.gz",
+    "bundle_sha256": "c03387ccd5e8340f11288e11eebbfe9c8d27f1260a477d7b756be3e1b583beee",
     "files": {
       "stage2_evaluation.json": {
         "sha256": "823e5a5305dd579a9c4b10f96f79863e81824775c7afbe87246fc069ca343f6a"
