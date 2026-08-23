@@ -54,7 +54,40 @@ def _window_means(rows: list[dict[str, Any]]) -> list[float]:
     return [statistics.mean(values) for values in windows.values() if values]
 
 
-def _arm_metrics(rows: list[dict[str, Any]], slo_ms: float) -> dict[str, Any]:
+def _qualified_request(
+    outcome: dict[str, Any],
+    *,
+    ttft_slo_ms: float,
+    tpot_slo_ms: float | None,
+    stream_gap_slo_ms: float | None,
+) -> tuple[bool, str]:
+    if not bool(outcome.get("success", False)):
+        return False, "request_failed"
+    ttft = float(outcome.get("ttft_ms", 0) or 0)
+    if ttft <= 0 or ttft > ttft_slo_ms:
+        return False, "ttft_slo_violation"
+    if tpot_slo_ms is not None:
+        tpot = outcome.get("tpot_ms")
+        if tpot is None:
+            return False, "tpot_missing"
+        if float(tpot) > tpot_slo_ms:
+            return False, "tpot_slo_violation"
+    if stream_gap_slo_ms is not None:
+        stream_gap = outcome.get("stream_gap_p95_ms")
+        if stream_gap is None:
+            return False, "stream_gap_missing"
+        if float(stream_gap) > stream_gap_slo_ms:
+            return False, "stream_gap_slo_violation"
+    return True, "qualified"
+
+
+def _arm_metrics(
+    rows: list[dict[str, Any]],
+    slo_ms: float,
+    *,
+    tpot_slo_ms: float | None = None,
+    stream_gap_slo_ms: float | None = None,
+) -> dict[str, Any]:
     ttfts = [float(row["outcome"].get("ttft_ms", 0)) for row in rows if float(row["outcome"].get("ttft_ms", 0)) > 0]
     successes = [row for row in rows if bool(row["outcome"].get("success", False))]
     timestamps = []
@@ -71,6 +104,25 @@ def _arm_metrics(rows: list[dict[str, Any]], slo_ms: float) -> dict[str, Any]:
         for row in rows
         if row["decision"].get("prediction_error")
     ]
+    qualification = [
+        _qualified_request(
+            row["outcome"],
+            ttft_slo_ms=slo_ms,
+            tpot_slo_ms=tpot_slo_ms,
+            stream_gap_slo_ms=stream_gap_slo_ms,
+        )
+        for row in rows
+    ]
+    qualified_requests = sum(is_qualified for is_qualified, _ in qualification)
+    reason_counts: dict[str, int] = {}
+    for _, reason in qualification:
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+    tpot_values = [float(row["outcome"]["tpot_ms"]) for row in rows if row["outcome"].get("tpot_ms") is not None]
+    stream_gap_values = [
+        float(row["outcome"]["stream_gap_p95_ms"])
+        for row in rows
+        if row["outcome"].get("stream_gap_p95_ms") is not None
+    ]
     return {
         "requests": len(rows),
         "successful_requests": len(successes),
@@ -78,6 +130,17 @@ def _arm_metrics(rows: list[dict[str, Any]], slo_ms: float) -> dict[str, Any]:
         "ttft_mean_ms": statistics.mean(ttfts) if ttfts else None,
         "ttft_p95_ms": _percentile(ttfts, .95),
         "slo_violation_rate": sum(value > slo_ms for value in ttfts) / len(ttfts) if ttfts else None,
+        "slo_qualified_requests": qualified_requests,
+        "slo_qualified_rate": qualified_requests / len(rows) if rows else None,
+        "goodput_req_s": qualified_requests / elapsed if elapsed > 0 else None,
+        "goodput_definition": "success and ttft <= ttft_slo_ms"
+        + (" and tpot <= tpot_slo_ms" if tpot_slo_ms is not None else "")
+        + (" and stream_gap_p95 <= stream_gap_slo_ms" if stream_gap_slo_ms is not None else ""),
+        "qualification_reasons": reason_counts,
+        "tpot_samples": len(tpot_values),
+        "tpot_p95_ms": _percentile(tpot_values, .95),
+        "stream_gap_samples": len(stream_gap_values),
+        "stream_gap_p95_ms": _percentile(stream_gap_values, .95),
         "throughput_req_s": len(rows) / elapsed if elapsed > 0 else None,
         "error_rate": 1 - len(successes) / len(rows) if rows else None,
         "fallback_rate": sum(bool(row["decision"].get("fallback", False)) for row in rows) / len(rows) if rows else None,
@@ -127,6 +190,8 @@ def evaluate_experiment(
     control_policy: str,
     treatment_policy: str,
     slo_ms: float,
+    tpot_slo_ms: float | None = None,
+    stream_gap_slo_ms: float | None = None,
     min_requests: int,
     bootstrap_samples: int,
     seed: int,
@@ -149,8 +214,18 @@ def evaluate_experiment(
     treatment_windows = _window_means(treatment_rows)
     clustered = len(control_windows) > 1 and len(treatment_windows) > 1
     ci_low, ci_high = _bootstrap_difference(control_windows if clustered else control_ttft, treatment_windows if clustered else treatment_ttft, bootstrap_samples, seed)
-    control_metrics = _arm_metrics(control_rows, slo_ms)
-    treatment_metrics = _arm_metrics(treatment_rows, slo_ms)
+    control_metrics = _arm_metrics(
+        control_rows,
+        slo_ms,
+        tpot_slo_ms=tpot_slo_ms,
+        stream_gap_slo_ms=stream_gap_slo_ms,
+    )
+    treatment_metrics = _arm_metrics(
+        treatment_rows,
+        slo_ms,
+        tpot_slo_ms=tpot_slo_ms,
+        stream_gap_slo_ms=stream_gap_slo_ms,
+    )
     assignment_ok = all(
         0 < float(row["decision"].get("assignment_probability", 0)) <= 1
         and row["decision"].get("assigned_policy") in {control_policy, treatment_policy}
@@ -193,6 +268,14 @@ def evaluate_experiment(
             "ci95_high_ms": ci_high,
             "ci_method": "window_cluster_bootstrap" if clustered else "request_bootstrap",
             "slo_violation_delta_percentage_points": ((treatment_metrics["slo_violation_rate"] or 0) - (control_metrics["slo_violation_rate"] or 0)) * 100,
+            "goodput_difference_req_s": (treatment_metrics["goodput_req_s"] or 0) - (control_metrics["goodput_req_s"] or 0),
+            "goodput_relative_percent": (
+                ((treatment_metrics["goodput_req_s"] or 0) - (control_metrics["goodput_req_s"] or 0))
+                / control_metrics["goodput_req_s"]
+                * 100
+                if control_metrics["goodput_req_s"]
+                else None
+            ),
         },
         "safety": {key: "PASS" if value else "FAIL" for key, value in safety.items()},
         "integrity": {**integrity, "assignment": "PASS" if integrity["assignment"] else "FAIL", "window_balance": "PASS" if integrity["window_balance"] else "FAIL", "contaminated_windows": contaminated_windows},
@@ -200,6 +283,16 @@ def evaluate_experiment(
         "promotion_eligible": promotion,
         "verdict": "PROMOTION_ELIGIBLE" if promotion else "NOT_ELIGIBLE",
         "claim_boundary": "This report estimates policy effects from outcome-grounded randomized assignments. Shared-resource interference is reduced by switchback or isolated pools but is not assumed to be eliminated.",
+        "slo": {
+            "ttft_ms": slo_ms,
+            "tpot_ms": tpot_slo_ms,
+            "stream_gap_p95_ms": stream_gap_slo_ms,
+            "measured_fields": {
+                "ttft": bool(control_metrics["ttft_samples"] and treatment_metrics["ttft_samples"]),
+                "tpot": bool(control_metrics["tpot_samples"] and treatment_metrics["tpot_samples"]),
+                "stream_gap": bool(control_metrics["stream_gap_samples"] and treatment_metrics["stream_gap_samples"]),
+            },
+        },
     }
 
 
@@ -222,6 +315,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Bootstrap 95% CI: `[{effect['ci95_low_ms']:.2f}, {effect['ci95_high_ms']:.2f}] ms`",
         f"- CI method: `{effect['ci_method']}`",
         f"- SLO violation delta: `{effect['slo_violation_delta_percentage_points']:.2f} pp`",
+        f"- Goodput difference: `{effect['goodput_difference_req_s']:.4f} req/s` ({effect['goodput_relative_percent'] if effect['goodput_relative_percent'] is not None else 'NA'}%)",
+        f"- Control goodput: `{control['goodput_req_s'] if control['goodput_req_s'] is not None else 'NA'} req/s`; treatment goodput: `{treatment['goodput_req_s'] if treatment['goodput_req_s'] is not None else 'NA'} req/s`",
+        f"- Goodput definition: `{control['goodput_definition']}`",
         "",
         "## Safety",
         "",
@@ -240,6 +336,8 @@ def main() -> int:
     parser.add_argument("--control", required=True)
     parser.add_argument("--treatment", required=True)
     parser.add_argument("--slo-ms", type=float, default=500)
+    parser.add_argument("--tpot-slo-ms", type=float, default=None)
+    parser.add_argument("--stream-gap-slo-ms", type=float, default=None)
     parser.add_argument("--min-requests", type=int, default=5000)
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=7)
@@ -256,6 +354,8 @@ def main() -> int:
         control_policy=args.control,
         treatment_policy=args.treatment,
         slo_ms=args.slo_ms,
+        tpot_slo_ms=args.tpot_slo_ms,
+        stream_gap_slo_ms=args.stream_gap_slo_ms,
         min_requests=args.min_requests,
         bootstrap_samples=args.bootstrap_samples,
         seed=args.seed,

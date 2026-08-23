@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -181,6 +182,9 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 				BackendVersion:        realized.backendVersion,
 				ObservedCacheHitRatio: realized.cacheHitRatio,
 				ObservedMatchedTokens: realized.matchedTokens,
+				TPOTMS:                realized.tpotMS(observed),
+				StreamGapP95MS:        realized.streamGapP95MS(observed),
+				StreamChunkCount:      len(observed.writeTimes),
 				CompletedAt:           time.Now().UTC(),
 			})
 		}
@@ -300,6 +304,7 @@ type observedWriter struct {
 	http.ResponseWriter
 	status       int
 	firstWriteAt time.Time
+	writeTimes   []time.Time
 }
 
 func (writer *observedWriter) WriteHeader(status int) {
@@ -317,6 +322,9 @@ func (writer *observedWriter) Write(data []byte) (int, error) {
 	if len(data) > 0 && writer.firstWriteAt.IsZero() {
 		writer.firstWriteAt = time.Now()
 	}
+	if len(data) > 0 {
+		writer.writeTimes = append(writer.writeTimes, time.Now())
+	}
 	return writer.ResponseWriter.Write(data)
 }
 
@@ -332,6 +340,39 @@ type requestOutcomeObservation struct {
 	ttftMS         *float64
 	cacheHitRatio  *float64
 	matchedTokens  *int
+}
+
+func (observation requestOutcomeObservation) tpotMS(writer *observedWriter) *float64 {
+	if len(writer.writeTimes) < 2 || observation.outputTokens <= 1 {
+		return nil
+	}
+	value := float64(writer.writeTimes[len(writer.writeTimes)-1].Sub(writer.writeTimes[0]).Microseconds()) / 1000 / float64(observation.outputTokens-1)
+	if value < 0 {
+		return nil
+	}
+	return &value
+}
+
+func (observation requestOutcomeObservation) streamGapP95MS(writer *observedWriter) *float64 {
+	if len(writer.writeTimes) < 2 {
+		return nil
+	}
+	intervals := make([]float64, 0, len(writer.writeTimes)-1)
+	for index := 1; index < len(writer.writeTimes); index++ {
+		intervals = append(intervals, float64(writer.writeTimes[index].Sub(writer.writeTimes[index-1]).Microseconds())/1000)
+	}
+	sort.Float64s(intervals)
+	position := .95 * float64(len(intervals)-1)
+	lower := int(position)
+	upper := lower
+	if lower < len(intervals)-1 {
+		upper++
+	}
+	value := intervals[lower]
+	if upper != lower {
+		value += (intervals[upper] - intervals[lower]) * (position - float64(lower))
+	}
+	return &value
 }
 
 type observedFlusher struct {

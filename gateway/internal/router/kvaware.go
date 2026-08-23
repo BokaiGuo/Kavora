@@ -78,6 +78,9 @@ type DecisionOutcome struct {
 	BackendVersion        string    `json:"backend_version,omitempty"`
 	ObservedCacheHitRatio *float64  `json:"observed_cache_hit_ratio,omitempty"`
 	ObservedMatchedTokens *int      `json:"observed_matched_tokens,omitempty"`
+	TPOTMS                *float64  `json:"tpot_ms,omitempty"`
+	StreamGapP95MS        *float64  `json:"stream_gap_p95_ms,omitempty"`
+	StreamChunkCount      int       `json:"stream_chunk_count,omitempty"`
 	CompletedAt           time.Time `json:"completed_at"`
 }
 

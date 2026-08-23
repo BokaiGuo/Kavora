@@ -96,7 +96,7 @@ validate-predictor:
 
 policy-evaluation:
 	@test -n "$(INPUT)" -a -n "$(EXPERIMENT_ID)" -a -n "$(CONTROL)" -a -n "$(TREATMENT)" || (echo "usage: make policy-evaluation INPUT=results/state EXPERIMENT_ID=... CONTROL=static TREATMENT=kv-v2"; exit 1)
-	$(PYTHON) -m planner.policy_evaluation --input "$(INPUT)" --experiment-id "$(EXPERIMENT_ID)" --control "$(CONTROL)" --treatment "$(TREATMENT)" $${SLO_MS:+--slo-ms "$$SLO_MS"} $${MIN_REQUESTS:+--min-requests "$$MIN_REQUESTS"} $${OUT:+--out "$$OUT"} $${REPORT:+--report "$$REPORT"}
+	$(PYTHON) -m planner.policy_evaluation --input "$(INPUT)" --experiment-id "$(EXPERIMENT_ID)" --control "$(CONTROL)" --treatment "$(TREATMENT)" $${SLO_MS:+--slo-ms "$$SLO_MS"} $${TPOT_SLO_MS:+--tpot-slo-ms "$$TPOT_SLO_MS"} $${STREAM_GAP_SLO_MS:+--stream-gap-slo-ms "$$STREAM_GAP_SLO_MS"} $${MIN_REQUESTS:+--min-requests "$$MIN_REQUESTS"} $${OUT:+--out "$$OUT"} $${REPORT:+--report "$$REPORT"}
 
 vllm-kv-events:
 	@test -n "$(BACKEND_ID)" -a -n "$(GENERATION)" -a -n "$(ENDPOINT)" -a -n "$(REPLAY_ENDPOINT)" || (echo "usage: make vllm-kv-events BACKEND_ID=... GENERATION=... ENDPOINT=tcp://127.0.0.1:5557 REPLAY_ENDPOINT=tcp://127.0.0.1:5558"; exit 1)

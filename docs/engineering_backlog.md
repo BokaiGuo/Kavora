@@ -31,10 +31,12 @@
 | P1 | `vllm_obs` block 语义补丁接入 | 让 `hidden_reuse_ready_perc` 从“弱信号”变成“可判别信号” |
 | P1 | 报告自动化生成 | 已加入 `scripts/generate_report_bundle.py` 和 `make final-report`，自动发现产物并复制图表 |
 | P2 | CI 补充图表回归 | 已加入 `scripts/check_capacity_sweep_artifact.py`，检查 summary schema、Markdown 图引用和 PNG 可读性 |
-| P1 | 真实 GPU Stage 2 artifact | 补齐硬件、模型和原始请求级证据，作为 v0.1.0 发布门禁 |
+| P1 | 真实 GPU Stage 2 artifact | 已冻结 `docs/releases/v0.1.0-evidence.json`；GitHub Release 资产仍需从真实机器上传完整 bundle |
 | P2 | SGLang 原生事件 transport | 在 SGLang 提供稳定事件协议后接入相同 sequence/generation contract |
 | P1 | Stage 7 online experiment artifact | 在真实请求上冻结 switchback 或 isolated-pool assignment、outcome journal 与 causal report |
 | P2 | held-out predictor evidence | 使用独立真实 GPU 时间窗运行已实现的 validator，并冻结泛化误差 artifact |
+| P1 | Stage 8 operating-point recommender | 以 goodput LCB、SLO 门禁、并发和资源预算选择 Pareto operating point |
+| P2 | GPU-second accounting | 接入可用的 GPU utilization/power evidence；不可用时显式标记 missing |
 
 ---
 

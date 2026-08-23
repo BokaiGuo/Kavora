@@ -1,0 +1,27 @@
+{
+  "release": "v0.1.0",
+  "status": "reviewed_real_gpu_evidence_attached",
+  "artifact": {
+    "local_source": "results/stage2/real-2026-08-20-kv/",
+    "bundle_name": "kavora-v0.1.0-stage2-real-2026-08-20-kv.tar.gz",
+    "files": {
+      "stage2_evaluation.json": {
+        "sha256": "823e5a5305dd579a9c4b10f96f79863e81824775c7afbe87246fc069ca343f6a"
+      },
+      "stage2_evaluation.md": {
+        "sha256": "c87bd9e4fe85bad681b3b36a6a9a5f89c56bf0bd3aee4f510f0824b66bddbbfc"
+      }
+    }
+  },
+  "manifest": {
+    "model": "qwen3-local",
+    "model_revision": "local-path:c1899de289a04d12100db370d81485cdf75e47ca",
+    "backend": "vLLM 0.11.0",
+    "gpu": "2 x NVIDIA GeForce RTX 5060 Ti, 16311 MiB",
+    "repetitions": 10,
+    "targets": 5,
+    "workloads": 4,
+    "request_errors": 0
+  },
+  "claim_boundary": "Measurements describe this exact hardware, model, configuration, and workload manifest only; no generalized performance claim is made without independent replication."
+}

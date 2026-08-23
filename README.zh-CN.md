@@ -85,6 +85,7 @@ flowchart LR
 决策结果账本、预测器校准、原生 KV events、prediction quality 与 policy laboratory 见 [`docs/stage6_outcome_grounded_control.md`](docs/stage6_outcome_grounded_control.md)。
 
 在线实验分配、因果 policy evaluation、exact hash alignment 和 held-out predictor validation 见 [`docs/stage7_causal_policy_evaluation.md`](docs/stage7_causal_policy_evaluation.md)。
+SLO-qualified goodput、TPOT、stream-gap 语义和 Stage 8 operating envelope 见 [`docs/stage8_slo_efficient_operating_envelope.md`](docs/stage8_slo_efficient_operating_envelope.md)。
 
 ## 快速开始
 
